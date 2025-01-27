@@ -1,2 +1,11 @@
+anthropic
 streamlit
-openai
+python-dotenv
+
+langchain>=0.1.0
+langchain-community>=0.0.10
+pdfminer.six>=20221105
+unstructured>=0.10.30
+python-magic-bin>=0.4.14
+nltk>=3.8.1
+pypdf>=3.17.1
