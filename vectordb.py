@@ -4,11 +4,16 @@ import json
 import numpy as np
 import voyageai
 import time
+import logging
+import streamlit as st
 
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
+
+# logging.basicConfig(level=logging.DEBUG,
+#                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 class VectorDB:
@@ -35,20 +40,27 @@ class VectorDB:
     # texts = [f"Heading: {item['chunk_heading']}\n\n Chunk Text:{item['text']}" for item in data]
     # texts = [f"Subject:{item['metadata']['subject']} Text": {item['content']}]
     texts = []
+    metadatas = []
 
     # Loop through each document and chunk
     for document in data['documents']:
       for chunk in document['chunks']:
+        # TODO Subject moved out of metadata
         subject = chunk['metadata']['subject']
         content = chunk['content']
+
+        metadata = chunk['metadata']
+        metadata['content'] = chunk['content']
+
         text = f"Subject:{subject} Text: {content}"
         texts.append(text)
+        metadatas.append(metadata)
 
-    self._embed_and_store(texts, data)
+    self._embed_and_store(texts, metadatas)
     self.save_db()
     print("Vector database loaded and saved.")
 
-  def _embed_and_store(self, texts, data):
+  def _embed_and_store(self, texts, metadatas):
     batch_size = 128
     result = []
     for i in range(0, len(texts), batch_size):
@@ -61,7 +73,31 @@ class VectorDB:
       # Add a delay of 1 second between each call to avoid rate limits
       time.sleep(1)
     self.embeddings = [embedding for batch in result for embedding in batch]
-    self.metadata = data
+    self.metadata = metadatas
+
+  def save_db(self):
+    data = {
+      "embeddings": self.embeddings,
+      "metadata": self.metadata,
+      "query_cache": json.dumps(self.query_cache),
+    }
+
+    os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+    with open(self.db_path, "wb") as file:
+      pickle.dump(data, file)
+
+  def load_db(self):
+    if not os.path.exists(self.db_path):
+      raise ValueError(
+        "Vector database file not found. use load_data to create a new database.")
+    with open(self.db_path, "rb") as file:
+      data = pickle.load(file)
+
+    self.embeddings = data["embeddings"]
+    # logging.debug(self.embeddings)
+
+    self.metadata = data["metadata"]
+    self.query_cache = json.loads(data["query_cache"])
 
   def search(self, query, k=5, similarity_threshold=0.75):
     if query in self.query_cache:
@@ -96,27 +132,19 @@ class VectorDB:
     self.save_db()
     return top_examples
 
-  def save_db(self):
-    data = {
-      "embeddings": self.embeddings,
-      "metadata": self.metadata,
-      "query_cache": json.dumps(self.query_cache),
-    }
+  def get_embedding_by_chunk_number(self, chunk_number):
+    try:
+      for idx, metadata in enumerate(self.metadata):
+        if metadata.get('chunk_number') == chunk_number:
+          embedding_idx = idx  # Assuming texts and metadata are aligned
+          st.write(f"vectordb:{chunk_number, embedding_idx}")
+          return self.embeddings[embedding_idx]
 
-    os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-    with open(self.db_path, "wb") as file:
-      pickle.dump(data, file)
-
-  def load_db(self):
-    if not os.path.exists(self.db_path):
-      raise ValueError(
-        "Vector database file not found. use load_data to create a new database.")
-    with open(self.db_path, "rb") as file:
-      data = pickle.load(file)
-
-    self.embeddings = data["embeddings"]
-    self.metadata = data["metadata"]
-    self.query_cache = json.loads(data["query_cache"])
+      return None
+    except Exception as e:
+      logging.error(f"Error retrieving embedding for chunk {
+                    chunk_number}: {str(e)}")
+      return None
 
 
 if __name__ == "__main__":

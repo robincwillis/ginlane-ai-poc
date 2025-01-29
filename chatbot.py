@@ -1,6 +1,10 @@
 import os
 from dotenv import load_dotenv
 from anthropic import Anthropic
+import logging
+import streamlit as st
+import json
+import pandas as pd
 
 from config import IDENTITY, MODEL, TOOLS
 from tools import get_quote
@@ -8,6 +12,9 @@ from vectordb import VectorDB
 
 # Load environment variables from .env file
 load_dotenv()
+
+# logging.basicConfig(level=logging.DEBUG,
+#                     format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 class ChatBot:
@@ -35,80 +42,79 @@ class ChatBot:
       return {"error": str(e)}
 
   def process_user_input(self, user_input):
-    self.session_state.messages.append({"role": "user", "content": user_input})
+    self.session_state.display_messages.append(
+      {"role": "user", "content": user_input})
+    # self.session_state.messages.append({"role": "user", "content": user_input})
 
-    response_message = self.vector_db.search(user_input)
+    search_results = self.vector_db.search(user_input)
+    if search_results:
+      with st.expander("Search Results"):
+        st.json(search_results, expanded=False)
+        extracted_results = [
+            {
+                "subject": result['metadata']['subject'],
+                "content": result['metadata']['content'],
+                "similarity": result['similarity']
+            }
+            for result in search_results
+        ]
+        df = pd.DataFrame(extracted_results)
+        st.dataframe(df, use_container_width=True)
 
-    if response_message:
-      response_text = response_message[0]['metadata']['content']
-      self.session_state.messages.append(
-        {"role": "assistant", "content": response_text})
-      return response_text
+      sorted_results = sorted(
+          search_results,
+          key=lambda x: float(x['similarity']),
+          reverse=True
+      )
+
+      top_chunk = sorted_results[0]['metadata']
+
+      with st.expander("Top Chunk"):
+        formatted_chunk = json.dumps(top_chunk, indent=4)
+        st.code(formatted_chunk, language="json")
+
+      # embeddeding = self.vector_db.get_embedding_by_chunk_number(top_chunk)
+      # logging.debug(f"embedded_text: {embedded_text}")
+      # st.write(f"embedded_text: {embedded_text}")
+      embedded_text = top_chunk['content']
+
+      content = embedded_text.split("Text:", 1)[1].strip(
+      ) if "Text:" in embedded_text else embedded_text
+
+      response_text = content
+      # self.session_state.messages.append(
+      #   {"role": "assistant", "content": response_text})
+
     else:
       response_text = "No relevant documents found."
-      self.session_state.messages.append(
-        {"role": "assistant", "content": response_text})
+      # self.session_state.messages.append(
+      #   {"role": "assistant", "content": response_text})
 
     # Include the response from the vector database as context for the LLM
-    context_message = {"role": "system",
-                       "content": f"Context: {response_text}"}
-    self.session_state.messages.append(context_message)
+    # context_message = {"role": "system",
+    #                   "content": f"Context: {response_text}"}
+
+    # Prepare messages for the LLM
+    context_message = {"role": "user", "content": (
+        f"Based on the following context, please provide a response to the user's question. "
+        f"Context: <context>{response_text}<context>\n\n"
+        f"User's question: <question>{user_input}</question>"
+    )}
+
+    with st.expander("Context Message"):
+      st.write(context_message['content'])
+
+    self.session_state.api_messages.append(context_message)
 
     stream_response = self.generate_message(
-      messages=self.session_state.messages,
+      messages=self.session_state.api_messages,
       max_tokens=2048
     )
 
-    # if "error" in response_message:
     if isinstance(stream_response, dict) and "error" in stream_response:
-      return f"An error occurred: {stream_response['error']}"
+      return f"process_user_input:error: {stream_response['error']}"
 
     return stream_response
-
-    # except Exception as e:
-    #     return f"Error during streaming {str(e)}"
-    # if response_message.content[-1].type == "tool_use":
-    #   tool_use = response_message.content[-1]
-    #   func_name = tool_use.name
-    #   func_params = tool_use.input
-    #   tool_use_id = tool_use.id
-    #   result = self.handle_tool_use(func_name, func_params)
-    #   self.session_state.messages.append(
-    #     {"role": "assistant", "content": response_message.content}
-    #   )
-
-    #   self.session_state.messages.append({
-    #     "role": "user",
-    #     "content": [{
-    #       "type": "tool_result",
-    #       "tool_use_id": tool_use_id,
-    #       "content": f"{result}",
-    #     },]
-    #   })
-
-    #   follow_up_response = self.generate_message(
-    #     messages=self.session_state.messages,
-    #     max_tokens=2048
-    #   )
-
-    #   if "error" in follow_up_response:
-    #     return f"An error occurred: {follow_up_response['error']}"
-
-    #   response_text = follow_up_response.content[0].text
-    #   self.session_state.messages.append(
-    #     {"role": "assistant", "content": response_text}
-    #   )
-    #   return response_text
-
-    # elif response_message.content[0].type == "text":
-    #   response_text = response_message.content[0].text
-    #   self.session_state.messages.append(
-    #     {"role": "assistant", "content": response_text}
-    #   )
-    #   return response_text
-
-    # else:
-    #  raise Exception("An error occurred: Unexpected response type")
 
   def handle_tool_use(self, func_name, func_params):
     if func_name == "get_quote":
