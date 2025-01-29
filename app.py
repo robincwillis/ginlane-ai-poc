@@ -7,7 +7,15 @@ import logging
 
 logging.basicConfig(level=logging.DEBUG)
 
-logging.debug("hello from app.py")
+# Inject custom CSS
+# st.markdown("""
+#     <style>
+#         /* Target the chat input field when focused */
+#         textarea:focus {
+#             border: 2px solid black !important;
+#         }
+#     </style>
+# """, unsafe_allow_html=True)
 
 
 def handle_stream_response(stream_response):
@@ -80,7 +88,7 @@ def main():
     st.chat_message("User").markdown(user_msg)
 
     with st.chat_message("assistant"):
-      with st.spinner("🐧 Gin Lane AI is thinking..."):
+      with st.spinner("🐧 is thinking..."):
         response_placeholder = st.empty()
         stream_response = chatbot.process_user_input(user_msg)
         full_response = handle_stream_response(stream_response)
