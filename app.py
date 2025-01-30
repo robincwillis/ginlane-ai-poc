@@ -46,7 +46,8 @@ def handle_stream_response(stream_response):
 
 
 async def main():
-  st.set_page_config(initial_sidebar_state='collapsed')
+  st.set_page_config(page_icon=":penguin:",
+                     page_title="Gin Lane AI", initial_sidebar_state='collapsed')
 
   st.title("Welcome to Gin Lane. 🌊")
 
