@@ -1,9 +1,8 @@
 
 import streamlit as st
 from chatbot import ChatBot
-from config import TASK_SPECIFIC_INSTRUCTIONS
+from config import TASK_SPECIFIC_INSTRUCTIONS, IDENTITY, STATIC_GREETINGS_AND_GENERAL, STATIC_EXPERIENCE_DESIGN, STATIC_BRANDING, STATIC_CREATIVE_DIRECTION, EXAMPLES, ADDITIONAL_GUARDRAILS
 import logging
-
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -20,10 +19,6 @@ logging.basicConfig(level=logging.DEBUG)
 
 def handle_stream_response(stream_response):
   """Handle the streaming response and UI updates"""
-  if isinstance(stream_response, dict) and "error" in stream_response:
-    st.error(f"Error: {stream_response['error']}")
-    return None
-
   try:
     # Use write_stream to handle the streaming content
     with stream_response as stream:
@@ -50,7 +45,9 @@ def handle_stream_response(stream_response):
     return None
 
 
-def main():
+async def main():
+  st.set_page_config(initial_sidebar_state='collapsed')
+
   st.title("Welcome to Gin Lane. 🌊")
 
   st.write(
@@ -59,6 +56,23 @@ def main():
     "interactive, ",
     "positioning.",
   )
+
+  with st.sidebar:
+    st.header("Identity")
+    st.caption(IDENTITY)
+    st.header("Static Context")
+    st.subheader("Greeting and General")
+    st.caption(STATIC_GREETINGS_AND_GENERAL)
+    st.subheader("Experience Design")
+    st.caption(STATIC_EXPERIENCE_DESIGN)
+    st.subheader("Branding")
+    st.caption(STATIC_BRANDING)
+    st.subheader("Creative Direction")
+    st.caption(STATIC_CREATIVE_DIRECTION)
+    st.subheader("Example Q&A")
+    st.caption(EXAMPLES)
+    st.subheader("Guardrails")
+    st.caption(ADDITIONAL_GUARDRAILS)
 
   if "display_messages" not in st.session_state:
     st.session_state.display_messages = []
@@ -69,32 +83,24 @@ def main():
       {'role': "assistant", "content": "Understood"},
     ]
 
-  # if "messages" not in st.session_state:
-  #   st.session_state.messages = [
-  #     {'role': "user", "content": TASK_SPECIFIC_INSTRUCTIONS},
-  #     {'role': "assistant", "content": "Understood"},
-  #   ]
-
   chatbot = ChatBot(st.session_state)
 
   for message in st.session_state.display_messages:
-
     # ignore tool use blocks
     if isinstance(message["content"], str):
       with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+  # Chat input
   if user_msg := st.chat_input("Type your message here..."):
     st.chat_message("User").markdown(user_msg)
 
     with st.chat_message("assistant"):
       with st.spinner("🐧 is thinking..."):
-        response_placeholder = st.empty()
-        stream_response = chatbot.process_user_input(user_msg)
-        full_response = handle_stream_response(stream_response)
+        # response_placeholder = st.empty()
 
-        # full_response = chatbot.process_user_input(user_msg)
-        # response_placeholder.markdown(full_response)
+        stream_response = await chatbot.process_user_input(user_msg)
+        full_response = handle_stream_response(stream_response)
 
         # Update chat history if response was successful
         if full_response is not None:
@@ -109,4 +115,5 @@ def main():
 
 
 if __name__ == "__main__":
-  main()
+  import asyncio
+  asyncio.run(main())

@@ -45,14 +45,12 @@ class VectorDB:
     # Loop through each document and chunk
     for document in data['documents']:
       for chunk in document['chunks']:
-        # TODO Subject moved out of metadata
-        subject = chunk['metadata']['subject']
+        subject = chunk['subject']
         content = chunk['content']
-
         metadata = chunk['metadata']
-        metadata['content'] = chunk['content']
-
         text = f"Subject:{subject} Text: {content}"
+        metadata['text'] = text
+
         texts.append(text)
         metadatas.append(metadata)
 
