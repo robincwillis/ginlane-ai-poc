@@ -29,8 +29,8 @@ def initialize_contexts() -> Dict[str, str]:
         'experience_design': STATIC_EXPERIENCE_DESIGN,
         'branding': STATIC_BRANDING,
         'creative_direction': STATIC_CREATIVE_DIRECTION,
-        'example_qa': EXAMPLES,
-        'guardrails': ADDITIONAL_GUARDRAILS,
+        'example_questions': EXAMPLES,
+        'guard_rails': ADDITIONAL_GUARDRAILS,
     }
   return st.session_state.contexts
 
@@ -123,7 +123,7 @@ def context_manager():
               st.toast("Context updated and chat state reset!", icon="✅")
 
         with col3:
-          if st.button("🗑️", key=f"delete_{key}"):
+          if st.button("🗑️", key=f"delete_{key}", use_container_width=True):
             keys_to_remove.append(key)
 
   for key in keys_to_remove:
