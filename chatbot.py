@@ -6,7 +6,7 @@ import streamlit as st
 import json
 import pandas as pd
 
-from config import IDENTITY, MODEL, TOOLS
+from config import MODEL, TOOLS
 from tools import get_quote
 # from vectordb import VectorDB
 from vector_store import VectorStore
@@ -16,9 +16,10 @@ load_dotenv()
 
 
 class ChatBot:
-  def __init__(self, session_state):
+  def __init__(self, identity, session_state):
     self.anthropic = Anthropic()
     self.session_state = session_state
+    self.identity = identity
     self.vector_store = VectorStore(index_name="gin-lane-docs-v1")
     # self.vector_db.load_db()
 
@@ -30,7 +31,7 @@ class ChatBot:
     try:
       response = self.anthropic.messages.stream(
         model=MODEL,
-        system=IDENTITY,
+        system=self.identity,
         max_tokens=max_tokens,
         messages=messages,
         tools=TOOLS

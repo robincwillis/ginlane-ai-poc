@@ -1,4 +1,6 @@
 
+from typing import Dict
+import uuid
 import streamlit as st
 from chatbot import ChatBot
 from config import TASK_SPECIFIC_INSTRUCTIONS, IDENTITY, STATIC_GREETINGS_AND_GENERAL, STATIC_EXPERIENCE_DESIGN, STATIC_BRANDING, STATIC_CREATIVE_DIRECTION, EXAMPLES, ADDITIONAL_GUARDRAILS
@@ -15,6 +17,117 @@ logging.basicConfig(level=logging.DEBUG)
 #         }
 #     </style>
 # """, unsafe_allow_html=True)
+
+
+def initialize_contexts() -> Dict[str, str]:
+  """Initialize default context values if they don't exist in session state"""
+  if 'identity' not in st.session_state:
+    st.session_state.identity = IDENTITY
+  if 'contexts' not in st.session_state:
+    st.session_state.contexts = {
+        'greeting_and_general': STATIC_GREETINGS_AND_GENERAL,
+        'experience_design': STATIC_EXPERIENCE_DESIGN,
+        'branding': STATIC_BRANDING,
+        'creative_direction': STATIC_CREATIVE_DIRECTION,
+        'example_qa': EXAMPLES,
+        'guardrails': ADDITIONAL_GUARDRAILS,
+    }
+  return st.session_state.contexts
+
+
+def initialize_chatbot():
+  st.session_state.display_messages = []
+  st.session_state.api_messages = [
+      {'role': "user", "content": combine_contexts()},
+      {'role': "assistant", "content": "Understood"},
+    ]
+  # Reinitialize chatbot with new identity
+  chatbot = ChatBot(st.session_state.identity, st.session_state)
+  # if 'chatbot' in st.session_state:
+  #   st.session_state.chatbot =
+  return chatbot
+
+
+def combine_contexts() -> str:
+  """Combine all contexts into a single message"""
+  contexts = st.session_state.contexts
+  context_texts = [v for k, v in contexts.items()]
+  return "\n\n".join(context_texts)
+
+
+def delete_context(key: str):
+  """Delete a context and trigger a rerun"""
+  del st.session_state.contexts[key]
+  initialize_chatbot()
+  st.rerun()
+  st.toast("Context deleted and chat state reset!", icon="✅")
+
+
+def context_manager():
+  """Create a management interface for context texts"""
+  contexts = initialize_contexts()
+  keys_to_remove = []
+  with st.sidebar:
+    # Identity input (separate from contexts)
+    new_identity = st.text_area(
+        "**Identity**",
+        value=st.session_state.identity,
+        key="identity_input",
+        height=250,
+
+    )
+
+    identity_changed = new_identity != st.session_state.identity
+
+    col1, col2 = st.columns([8, 2])
+
+    with col2:
+      if st.button("Update", key=f"update_identity", type="primary", use_container_width=True, disabled=identity_changed != True):
+        if identity_changed:
+          st.session_state.identity = new_identity
+          initialize_chatbot()
+          st.toast("Identity updated and chat state reset!", icon="✅")
+
+    # Container for context editors
+    context_editors = st.container()
+
+    # Add new context button
+    if st.button("Add New Context"):
+      new_key = f"context_{str(uuid.uuid4())[:8]}"
+      contexts[new_key] = ""
+      st.session_state.contexts = contexts
+
+    # Create text areas for each context
+    with context_editors:
+      for key, value in contexts.items():
+        new_context = st.text_area(
+            f"**{key.replace('_', ' ').title()}**",
+            value=value,
+            key=f"textarea_{key}",
+            height=320,
+        )
+        context_changed = st.session_state.contexts[key] != new_context
+
+        col1, col2, col3 = st.columns([5, 2, 1])
+        with col2:
+          if st.button(
+            "Update",
+            key=f"update_{key}",
+            type="primary",
+            use_container_width=True,
+            disabled=context_changed != True
+          ):
+            if context_changed:
+              st.session_state.contexts[key] = new_context
+              initialize_chatbot()
+              st.toast("Context updated and chat state reset!", icon="✅")
+
+        with col3:
+          if st.button("🗑️", key=f"delete_{key}"):
+            keys_to_remove.append(key)
+
+  for key in keys_to_remove:
+    delete_context(key)
 
 
 def handle_stream_response(stream_response):
@@ -50,41 +163,15 @@ async def main():
                      page_title="Gin Lane AI", initial_sidebar_state='collapsed')
 
   st.title("Welcome to Gin Lane. 🌊")
-
   st.write(
-    "We’re here to help you with any and all req uests related to: ",
+    "We’re here to help you with any and all requests related to: ",
     "brand, ",
     "interactive, ",
     "positioning.",
   )
 
-  with st.sidebar:
-    st.header("Identity")
-    st.caption(IDENTITY)
-    st.header("Static Context")
-    st.subheader("Greeting and General")
-    st.caption(STATIC_GREETINGS_AND_GENERAL)
-    st.subheader("Experience Design")
-    st.caption(STATIC_EXPERIENCE_DESIGN)
-    st.subheader("Branding")
-    st.caption(STATIC_BRANDING)
-    st.subheader("Creative Direction")
-    st.caption(STATIC_CREATIVE_DIRECTION)
-    st.subheader("Example Q&A")
-    st.caption(EXAMPLES)
-    st.subheader("Guardrails")
-    st.caption(ADDITIONAL_GUARDRAILS)
-
-  if "display_messages" not in st.session_state:
-    st.session_state.display_messages = []
-
-  if "api_messages" not in st.session_state:
-    st.session_state.api_messages = [
-      {'role': "user", "content": TASK_SPECIFIC_INSTRUCTIONS},
-      {'role': "assistant", "content": "Understood"},
-    ]
-
-  chatbot = ChatBot(st.session_state)
+  context_manager()
+  chatbot = initialize_chatbot()
 
   for message in st.session_state.display_messages:
     # ignore tool use blocks
@@ -99,6 +186,10 @@ async def main():
     with st.chat_message("assistant"):
       with st.spinner("🐧 is thinking..."):
         # response_placeholder = st.empty()
+        logging.debug('User Message')
+        logging.debug(st.session_state.user_msg)
+        logging.debug(st.session_state.identity)
+        logging.debug(st.session_state.contexts)
 
         stream_response = await chatbot.process_user_input(user_msg)
         full_response = handle_stream_response(stream_response)
