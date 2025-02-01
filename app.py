@@ -79,7 +79,7 @@ def context_manager():
 
     identity_changed = new_identity != st.session_state.identity
 
-    col1, col2 = st.columns([8, 2])
+    col1, col2 = st.columns([8, 4])
 
     with col2:
       if st.button("Update", key=f"update_identity", type="primary", use_container_width=True, disabled=identity_changed != True):
@@ -108,7 +108,7 @@ def context_manager():
         )
         context_changed = st.session_state.contexts[key] != new_context
 
-        col1, col2, col3 = st.columns([5, 2, 1])
+        col1, col2, col3 = st.columns([6, 4, 2])
         with col2:
           if st.button(
             "Update",
