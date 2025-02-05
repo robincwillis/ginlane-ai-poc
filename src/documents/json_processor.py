@@ -34,7 +34,7 @@ class JsonProcessor:
     for qa in qa_data:
       question = qa.get('question', '')
       answer = qa.get('answer', '')
-      content = f"Question: {question}\nAnswer: {answer}"
+      content = answer  # f"Question: {question}\nAnswer: {answer}"
       # Calculate TF-IDF based relevance score
       # tfidf_score = max(self.vectorizer.transform([question]).toarray()[0])
       tfidf_score = 0

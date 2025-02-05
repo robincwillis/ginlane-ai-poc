@@ -16,10 +16,13 @@ class MarkdownProcessor:
   def __init__(
       self,
       markdown_path,
+      priority_boost: float = 0.2,
       chunk_size: int = DEF_CHUNK_SIZE,
       chunk_overlap: int = DEF_CHUNK_OVERLAP
     ):
     print(f"init MarkdownProcessor:")
+
+    self.priority_boost = priority_boost
 
     seperators = [
         ("#", "header_1"),
@@ -80,7 +83,6 @@ class MarkdownProcessor:
     # Get Chunk Priority
 
     content = self.clean_markdown(self.text)
-    print(content)
     docs = self.markdown_splitter.split_text(content)
     splits = self.text_splitter.split_documents(docs)
     return splits
@@ -92,5 +94,4 @@ if __name__ == "__main__":
   markdown_processor = MarkdownProcessor(markdown_path)
   docs = markdown_processor.process_document()
 
-  # print(docs)
   DocumentUtils.save_documents_to_json(docs, "test.json")

@@ -74,3 +74,7 @@ class DocumentUtils:
         if len(content) > max_summary_length
         else content
     }
+
+  @staticmethod
+  def calculate_chunk_metrics():
+    """Todo """
