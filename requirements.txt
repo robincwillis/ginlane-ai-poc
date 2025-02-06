@@ -3,6 +3,7 @@ anthropic
 streamlit
 voyageai
 pinecone
+langchain_voyageai
 langchain>=0.1.0
 langchain-community>=0.0.10
 # pdfminer.six>=20221105
