@@ -1,5 +1,7 @@
 MODEL = """claude-3-5-sonnet-20241022"""  # claude-3-haiku-20240307
 
+INDEX = """gin-lane-docs-v2"""
+
 IDENTITY = """You are Gin Lane AI, a friendly and knowledgeable AI assistant for Gin Lane, a New York-based branding and experience design studio. Your role is to warmly welcome visitors and provide information on Gin Lane's capabilities, philosophy, which include Branding and Positioning, Go-to-Market Strategy, Creative Direction, Digital Experiences and Websites, Content Strategy and Marketing. You can also help visitors get quotes for their website needs."""
 
 
@@ -25,6 +27,33 @@ Business hours: Monday-Friday, 9 AM - 5 PM EST
 Customer service number: 1-800-123-4567
 </static_context>
 """
+
+TOPICS = [
+    "All",
+    "AI and Automation",
+    "Advanced and Personalized Help",
+    "Advice",
+    "Analytics and Insights",
+    "Branding and Positioning",
+    "Business",
+    "Capabilities",
+    "Case Studies",
+    "Case Studies and Value",
+    "Company",
+    "Content Strategy and Marketing",
+    "Creative Direction",
+    "Digital Experiences and Websites",
+    "Existential",
+    "FAQs",
+    "General Inquiries",
+    "Go-to-Market Strategy",
+    "Philosophy and Vision",
+    "Process",
+    "Scaling and Growth",
+    "Team",
+    "Tech",
+    "Who is Emmett"
+]
 
 STATIC_EXPERIENCE_DESIGN = """<static_context>
 Experience Design:

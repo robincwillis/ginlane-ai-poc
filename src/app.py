@@ -2,21 +2,11 @@
 from typing import Dict
 import uuid
 import streamlit as st
-from chatbot import ChatBot
-from config import TASK_SPECIFIC_INSTRUCTIONS, IDENTITY, STATIC_GREETINGS_AND_GENERAL, STATIC_EXPERIENCE_DESIGN, STATIC_BRANDING, STATIC_CREATIVE_DIRECTION, EXAMPLES, ADDITIONAL_GUARDRAILS
+from agent.chatbot import ChatBot
+from config import IDENTITY, INDEX, TOPICS, STATIC_GREETINGS_AND_GENERAL, EXAMPLES, ADDITIONAL_GUARDRAILS
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
-
-# Inject custom CSS
-# st.markdown("""
-#     <style>
-#         /* Target the chat input field when focused */
-#         textarea:focus {
-#             border: 2px solid black !important;
-#         }
-#     </style>
-# """, unsafe_allow_html=True)
+logging.basicConfig(level=logging.INFO)
 
 
 def initialize_contexts() -> Dict[str, str]:
@@ -26,12 +16,25 @@ def initialize_contexts() -> Dict[str, str]:
   if 'contexts' not in st.session_state:
     st.session_state.contexts = {
         'greeting_and_general': STATIC_GREETINGS_AND_GENERAL,
-        'experience_design': STATIC_EXPERIENCE_DESIGN,
-        'branding': STATIC_BRANDING,
-        'creative_direction': STATIC_CREATIVE_DIRECTION,
+        # 'experience_design': STATIC_EXPERIENCE_DESIGN,
+        # 'branding': STATIC_BRANDING,
+        # 'creative_direction': STATIC_CREATIVE_DIRECTION,
         'example_questions': EXAMPLES,
         'guard_rails': ADDITIONAL_GUARDRAILS,
     }
+  if 'topics' not in st.session_state:
+    st.session_state.topics = TOPICS
+    st.session_state.topic_filter = "All"
+
+  if 'priority_filter' not in st.session_state:
+    st.session_state.priority_filter = 0.5
+
+  if 'filter' not in st.session_state:
+    st.session_state.filter = {
+      "subjects": None,
+      "priority": {"$gte": 0.5}
+    }
+
   return st.session_state.contexts
 
 
@@ -42,7 +45,7 @@ def initialize_chatbot():
       {'role': "assistant", "content": "Understood"},
     ]
   # Reinitialize chatbot with new identity
-  chatbot = ChatBot(st.session_state.identity, st.session_state)
+  chatbot = ChatBot(st.session_state.identity, INDEX, st.session_state)
   # if 'chatbot' in st.session_state:
   #   st.session_state.chatbot =
   return chatbot
@@ -63,11 +66,50 @@ def delete_context(key: str):
   st.toast("Context deleted and chat state reset!", icon="✅")
 
 
+def update_priority_filter(value):
+  if value != st.session_state.priority_filter:
+    st.session_state["priority_filter"] = value
+    st.session_state["filter"]["priority"] = {"$gte": value}
+
+
+def update_topic_filter(value):
+  if value != st.session_state.priority_filter:
+    st.session_state["topic_filter"] = value
+    if value != "All":
+      st.session_state["filter"]["subjects"] = value
+    else:
+      st.session_state["filter"]["subjects"] = None
+
+
 def context_manager():
   """Create a management interface for context texts"""
+
   contexts = initialize_contexts()
   keys_to_remove = []
   with st.sidebar:
+
+    st.header("Search Settings")
+
+    selected_topic = st.selectbox(
+      "Filter by Topic",
+      st.session_state.topics,
+      # on_change=update_topic_filter,
+      # args=(st.session_state.topic_filter,)
+    )
+    update_topic_filter(selected_topic)
+
+    priority_filter = st.slider(
+      "Priority Threshold",
+      0.0,
+      1.0,
+      0.5,
+      0.1,
+      # on_change=update_priority_filter,
+      # args=(st.session_state.priority_filter,)
+    )
+    update_priority_filter(priority_filter)
+
+    st.header("Agent Context")
     # Identity input (separate from contexts)
     new_identity = st.text_area(
         "**Identity**",
@@ -186,12 +228,11 @@ async def main():
     with st.chat_message("assistant"):
       with st.spinner("🐧 is thinking..."):
         # response_placeholder = st.empty()
-        logging.debug('User Message')
-        logging.debug(st.session_state.user_msg)
-        logging.debug(st.session_state.identity)
-        logging.debug(st.session_state.contexts)
+        logging.info('User Message')
+        logging.info(user_msg)
+        logging.info(st.session_state.filter)
 
-        stream_response = await chatbot.process_user_input(user_msg)
+        stream_response = await chatbot.process_user_input(user_msg, st.session_state.filter)
         full_response = handle_stream_response(stream_response)
 
         # Update chat history if response was successful

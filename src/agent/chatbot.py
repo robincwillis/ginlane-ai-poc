@@ -1,4 +1,6 @@
+import sys
 import os
+
 from dotenv import load_dotenv
 from anthropic import Anthropic
 import logging
@@ -7,21 +9,21 @@ import json
 import pandas as pd
 
 from config import MODEL, TOOLS
-from tools import get_quote
-# from vectordb import VectorDB
-from vector_store import VectorStore
+from agent.tools import get_quote
+
+from vectorstore.vector_store import VectorStore
 
 # Load environment variables from .env file
 load_dotenv()
 
 
 class ChatBot:
-  def __init__(self, identity, session_state):
+  def __init__(self, identity, index, session_state):
     self.anthropic = Anthropic()
     self.session_state = session_state
     self.identity = identity
-    self.vector_store = VectorStore(index_name="gin-lane-docs-v1")
-    # self.vector_db.load_db()
+    self.vector_store = VectorStore(index_name=index)
+    # self.vector_db.load_db() # For local dev
 
   def generate_message(
     self,
@@ -40,36 +42,28 @@ class ChatBot:
     except Exception as e:
       return {"error": str(e)}
 
-  async def get_context(self, search_input):
-    search_results = await self.vector_store.search_similar(search_input)
+  async def get_context(self, search_input, filter):
+    clean_filter = {k: v for k, v in filter.items() if v is not None}
+    search_results = await self.vector_store.search_similar(search_input, filter=clean_filter)
     if search_results:
       with st.expander("📕 Relevant Documents"):
+        logging.info(search_results)
         st.json(search_results, expanded=False)
         extracted_results = [
             {
                 # "subject": result['metadata']['subject'],
-                "text": result['text'],
-                "score": result['score']
+                "text": text,
+                "topics": metadata["subjects"],
+                "priority": metadata["priority"],
+                "score": score,
             }
-            for result in search_results
+            for text, score, metadata in search_results
         ]
         df = pd.DataFrame(extracted_results)
         st.dataframe(df, use_container_width=True)
 
-      # sorted_results = sorted(
-      #     search_results,
-      #     key=lambda x: float(x['similarity']),
-      #     reverse=True
-      # )
-
-      # top_chunk = sorted_results[0]['metadata']
-
-      # with st.expander("Top Chunk"):
-      #   st.json(top_chunk, expanded=True)
-
-      # embedded_text = top_chunk['content']
       context = "\n".join(
-        [f"{doc['text']}\n\n" for doc in search_results])
+        [f"{text}\n\n" for text in search_results])
 
       # content = embedded_text.split("Text:", 1)[1].strip(
       # ) if "Text:" in embedded_text else embedded_text
@@ -81,16 +75,16 @@ class ChatBot:
 
     return context
 
-  async def process_user_input(self, user_input):
+  async def process_user_input(self, user_input, filter):
     self.session_state.display_messages.append(
       {"role": "user", "content": user_input})
 
-    response_text = await self.get_context(user_input)
+    context_text = await self.get_context(user_input, filter)
 
     # Include the response from the vector database as context for the LLM
     context_message = {"role": "user", "content": (
         f"Based on the following context, please provide a response to the user's question. "
-        f"Context: <context>{response_text}<context>\n\n"
+        f"Context: <context>{context_text}<context>\n\n"
         f"User's question: <question>{user_input}</question>"
     )}
 

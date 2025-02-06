@@ -17,6 +17,11 @@ import voyageai
 
 load_dotenv()
 
+logging.getLogger("pinecone").setLevel(logging.WARNING)
+logging.getLogger("pinecone_plugin_interface").setLevel(logging.WARNING)
+logging.getLogger(
+  "pinecone_plugin_interface.logging").setLevel(logging.WARNING)
+
 
 class VectorStore:
 
@@ -28,7 +33,6 @@ class VectorStore:
     dimension: int = 1024,  # Voyage AI's default dimension
     weight_factor: float = 2.0
   ):
-    logging.debug("init")
 
     pc = Pinecone(api_key=pinecone_api_key)
 
@@ -146,11 +150,9 @@ class VectorStore:
     #   ids=ids
     # )
 
-  # Return 3 most similar documents from the search.
-
   async def search_similar(
     self,
-    query: str,
+      query: str,
     k: int = 5,
     filter=None,
     rerank=True,
@@ -242,6 +244,12 @@ async def search(vector_store):
     rerank=True,
     rerank_k=5  # Number of candidates to consider for reranking
   )
+
+  # sorted_results = sorted(
+  #     search_results,
+  #     key=lambda x: float(x['similarity']),
+  #     reverse=True
+  # )
 
   # Print results
   print(f"\nSearch results for query: '{query}'")
