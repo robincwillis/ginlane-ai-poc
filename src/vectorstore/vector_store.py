@@ -262,8 +262,8 @@ async def search(vector_store):
 async def main():
   vector_store = VectorStore('gin-lane-docs-v2')
 
-  # await embed_and_upsert(vector_store)
-  await search(vector_store)
+  await embed_and_upsert(vector_store)
+  # await search(vector_store)
 
 
 # './data/json/gin_lane_docs.json'

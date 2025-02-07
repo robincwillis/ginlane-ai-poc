@@ -19,7 +19,7 @@ def initialize_contexts() -> Dict[str, str]:
         # 'experience_design': STATIC_EXPERIENCE_DESIGN,
         # 'branding': STATIC_BRANDING,
         # 'creative_direction': STATIC_CREATIVE_DIRECTION,
-        'example_questions': EXAMPLES,
+        # 'example_questions': EXAMPLES,
         'guard_rails': ADDITIONAL_GUARDRAILS,
     }
   if 'topics' not in st.session_state:
@@ -39,8 +39,11 @@ def initialize_contexts() -> Dict[str, str]:
 
 
 def initialize_chatbot():
-  st.session_state.display_messages = []
-  st.session_state.api_messages = [
+  if 'display_messages' not in st.session_state:
+    st.session_state.display_messages = []
+
+  if 'api_messages' not in st.session_state:
+    st.session_state.api_messages = [
       {'role': "user", "content": combine_contexts()},
       {'role': "assistant", "content": "Understood"},
     ]
@@ -81,10 +84,9 @@ def update_topic_filter(value):
       st.session_state["filter"]["subjects"] = None
 
 
-def context_manager():
+def context_manager(contexts):
   """Create a management interface for context texts"""
 
-  contexts = initialize_contexts()
   keys_to_remove = []
   with st.sidebar:
 
@@ -212,9 +214,11 @@ async def main():
     "positioning.",
   )
 
-  context_manager()
+  contexts = initialize_contexts()
   chatbot = initialize_chatbot()
+  context_manager(contexts)
 
+  logging.info(st.session_state.display_messages)
   for message in st.session_state.display_messages:
     # ignore tool use blocks
     if isinstance(message["content"], str):

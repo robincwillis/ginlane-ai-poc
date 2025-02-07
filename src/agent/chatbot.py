@@ -36,7 +36,7 @@ class ChatBot:
         system=self.identity,
         max_tokens=max_tokens,
         messages=messages,
-        tools=TOOLS
+        # tools=TOOLS
       )
       return response
     except Exception as e:
@@ -63,7 +63,7 @@ class ChatBot:
         st.dataframe(df, use_container_width=True)
 
       context = "\n".join(
-        [f"{text}\n\n" for text in search_results])
+        [f"{text}\n\n" for text, score, metadata in search_results])
 
       # content = embedded_text.split("Text:", 1)[1].strip(
       # ) if "Text:" in embedded_text else embedded_text
