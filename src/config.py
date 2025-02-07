@@ -16,12 +16,17 @@ We collaborate with startup founders and venture investors in the consumer and h
 
 Little Plains, offers the following services:
 * Website Design and Development
-* Experience Design  
-* Branding  
+* Digital Experience Design  
+* Branding and Positioning
 * Creative Direction  
 * Service Design  
 * Dynamic Content  
-* Growth
+* Scaling and Growth
+* AI and Automation
+* Go-to-Market Strategy
+* Content Strategy and Marketing
+* Analytics and Insights
+* Tech and development
 </static_context>
 """
 
