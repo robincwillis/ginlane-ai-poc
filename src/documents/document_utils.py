@@ -1,3 +1,4 @@
+import os
 import uuid
 import hashlib
 from typing import Dict, Any
@@ -31,6 +32,48 @@ class DocumentUtils:
     """Load dataset from JSON file"""
     with open(input_path, 'r', encoding='utf-8') as f:
       return json.load(f)
+
+  @staticmethod
+  def get_subject_from_path(
+    file_path: str,
+    base_dir: str
+  ) -> str:
+    """Extract subject from the directory structure"""
+    # Get relative path from base directory
+    rel_path = os.path.relpath(os.path.dirname(file_path), base_dir)
+    if rel_path == '.':
+      return None
+    subject = rel_path.replace(os.sep, '/').replace('_', ' ').title()
+    return subject
+
+  @staticmethod
+  def get_directory_structure(base_dir: str) -> Dict:
+    """Create a dictionary representing the directory structure"""
+    structure = {}
+
+    for root, dirs, files in os.walk(base_dir):
+      # Get relative path
+      rel_path = os.path.relpath(root, base_dir)
+      current_dict = structure
+
+      # Skip the base directory
+      if rel_path != '.':
+        # Split path into parts
+        path_parts = rel_path.split(os.sep)
+
+        # Build nested dictionary
+        for part in path_parts:
+          if part not in current_dict:
+            current_dict[part] = {}
+          current_dict = current_dict[part]
+
+      # Add files
+      # docs = [f for f in files if f.endswith(('.pdf', '.md'))]
+      docs = [f for f in files]
+      if docs:
+        current_dict['documents'] = docs
+
+    return structure
 
   @staticmethod
   def generate_chunk_id() -> str:

@@ -1,2 +1,26 @@
 {
+  "python.analysis.extraPaths": [
+    "./src/documents"
+  ],
+  "explorer.excludeGitIgnore": false,
+  "search.useParentIgnoreFiles": false,
+  "search.useIgnoreFiles": false,
+  "search.exclude": {
+    "**/.venv": true,
+    "**/data/**": false, // Ensure the /data path is searchable
+    "**/*.md": false, // Ensure markdown files are searchable
+    "**/*.txt": false // Ensure markdown files are searchable
+  },
+  "files.exclude": {
+    "**/.venv": true,
+    "**/data/**": false, // Ensure the /data path is searchable
+    "**/*.md": false, // Ensure markdown files are searchable
+    "**/*.txt": false // Ensure markdown files are searchable
+  },
+  "files.watcherExclude": {
+    "**/.venv": true,
+    "**/data/**": false, // Ensure the /data path is watched
+    "**/*.md": false, // Ensure markdown files are watched
+    "**/*.txt": false // Ensure text files are watched
+  }
 }

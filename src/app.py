@@ -3,7 +3,7 @@ from typing import Dict
 import uuid
 import streamlit as st
 from agent.chatbot import ChatBot
-from config import IDENTITY, INDEX, TOPICS, STATIC_GREETINGS_AND_GENERAL, EXAMPLES, ADDITIONAL_GUARDRAILS
+from config import IDENTITY, INDEX, TOPICS, STATIC_GREETINGS_AND_GENERAL, TERMS, CONTACT, ADDITIONAL_GUARDRAILS
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -16,11 +16,9 @@ def initialize_contexts() -> Dict[str, str]:
   if 'contexts' not in st.session_state:
     st.session_state.contexts = {
         'greeting_and_general': STATIC_GREETINGS_AND_GENERAL,
-        # 'experience_design': STATIC_EXPERIENCE_DESIGN,
-        # 'branding': STATIC_BRANDING,
-        # 'creative_direction': STATIC_CREATIVE_DIRECTION,
-        # 'example_questions': EXAMPLES,
-        'guard_rails': ADDITIONAL_GUARDRAILS,
+        'contact': CONTACT,
+        'termonology': TERMS,
+        # 'guard_rails': ADDITIONAL_GUARDRAILS,
     }
   if 'topics' not in st.session_state:
     st.session_state.topics = TOPICS

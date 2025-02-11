@@ -3,9 +3,11 @@ import logging
 import numpy as np
 
 from dotenv import load_dotenv
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import asyncio
 import json
+from dataclasses import dataclass
+
 
 # from langchain_community.vectorstores import Pinecone as LangchainPinecone
 # from langchain.embeddings.base import Embeddings
@@ -23,6 +25,25 @@ logging.getLogger(
   "pinecone_plugin_interface.logging").setLevel(logging.WARNING)
 
 
+@dataclass
+class ChunkRelation:
+  chunk_id: str
+  relationship_ids: Optional[List[str]]
+  relationship_strength: float
+  relation_type: str  # e.g., "next", "previous", "parent", "child", "reference"
+
+
+@dataclass
+class ChunkMetadata:
+  chunk_id: str
+  project_id: str
+  client_id: str
+  # source_file: str
+  # page_number: Optional[int] = None
+  # section: Optional[str] = None
+  # related_chunks: List[ChunkRelation] = field(default_factory=list)
+
+
 class VectorStore:
 
   def __init__(
@@ -31,7 +52,8 @@ class VectorStore:
     pinecone_api_key: str = os.getenv("PINECONE_API_KEY"),
     voyage_api_key: str = os.getenv("VOYAGE_API_KEY"),
     dimension: int = 1024,  # Voyage AI's default dimension
-    weight_factor: float = 2.0
+    weight_factor: float = 2.0,
+    relationship_boost=1.5
   ):
 
     pc = Pinecone(api_key=pinecone_api_key)
@@ -58,15 +80,43 @@ class VectorStore:
 
     self.voyage_client = voyageai.Client(api_key=voyage_api_key)
 
+  def calculate_relationships(
+    self,
+    chunk_id,
+    # questions: List[Dict],
+    chunks: List[Dict]
+  ):
+    """Calculate relationship strength between a chunk and related questions"""
+
+    related_chunks = []
+    relationship_strength = 1.0  # Base strength
+    for chunk in chunks:
+      if chunk_id in chunk.get('correct_chunks', []):
+        related_chunks.append(chunk['id'])
+        # Boost strength based on number of related questions
+        relationship_strength += 0.2
+      # if client or service, then boost strength
+    return ChunkRelation(
+      chunk_id=chunk_id,
+      relationship_ids=related_chunks,
+      relationship_strength=relationship_strength,
+      relation_type="reference"
+    )
+
   def prepare_text(self, chunk):
-    subjects = " ".join(chunk['subjects']) if chunk['subjects'] else ""
-    headings = " > ".join(chunk['headings']) if chunk['headings'] else ""
+    subjects = ", ".join(chunk.get('subjects', []))
+    headings = ", ".join(chunk.get('headings', []))
+    services = ", ".join(chunk.get('services', []))
+    client_name = chunk.get('client_name')
+
     content = chunk['content']
 
     # Weighted text construction strategy
     enhanced_text = f"""
       {'Headings: ' + headings if headings else ''}
       {'Subjects: ' + subjects if subjects else ''}
+      {'Services: ' + services if services else ''}
+      {'Client: ' + client_name if client_name else ''}
       Content: {content}
     """.strip()
 
@@ -79,23 +129,58 @@ class VectorStore:
     # TODO Improve documents chunking, formatting etc.
     texts = []
     metadatas = []
-    for document in data['documents']:
-      for chunk in document['chunks']:
-        metadata = chunk['metadata']
-        text = self.prepare_text(chunk)
-        metadata['text'] = text
-        metadata['id'] = chunk['chunk_id']
-        metadata['subjects'] = chunk['subjects']
-        texts.append(text)
-        metadatas.append(metadata)
+    for chunk in data:
+      metadata = chunk['metadata']
+      text = self.prepare_text(chunk)
+      metadata['text'] = text
+      metadata['id'] = chunk['chunk_id']
+      metadata['question'] = chunk.get('question')
+      metadata['services'] = chunk.get('services')
+      metadata['subjects'] = chunk.get('subjects')
+      metadata['tags'] = chunk.get('tags')
+      texts.append(text)
+      metadatas.append(metadata)
 
     return texts, metadatas
 
-  def embed_documents(self, texts, metadatas=None):
+  def enhance_metadata(
+    self,
+    metadata: Dict,
+    chunk_relationships: Optional[ChunkRelation] = None
+  ):
+    enhanced = metadata.copy()
+
+    if chunk_relationships:
+      enhanced.update({
+        'related_chunks': chunk_relationships.relationship_ids,
+        'relationship_strength': chunk_relationships.relationship_strength,
+      })
+
+      # Adjust priority based on relationships
+      if 'priority' in enhanced:
+        enhanced['priority'] = enhanced['priority'] * \
+          chunk_relationships.relationship_strength
+
+    print(enhanced)
+    return enhanced
+
+  def embed_documents(
+    self,
+    texts,
+    metadatas=None,
+    chunk_relationships: Optional[List[ChunkRelation]] = None
+  ):
+    # Calculate base priorities
     priorities = [
       metadata.get('priority', 0.5)
       for metadata in metadatas
     ]
+
+    # Adjust priorities based on relationships
+    if chunk_relationships:
+      for i, relationship in enumerate(chunk_relationships):
+        if relationship:
+          priorities[i] *= relationship.relationship_strength
 
     base_embeddings = self.embeddings.embed_documents(texts)
 
@@ -113,7 +198,17 @@ class VectorStore:
       documents: List of dicts with 'text' and optional metadata
     """
     texts, metadatas = self.load_documents(data)
-    weighted_embeddings = self.embed_documents(texts, metadatas)
+
+    chunk_relationships = None
+
+    if data:
+      chunk_relationships = [
+        self.calculate_relationships(
+          metadata.get('chunk_id'),
+          data
+        )
+        for metadata in metadatas
+      ]
 
     ids = [
         metadata.get('id') or  # Use existing ID if provided
@@ -122,33 +217,34 @@ class VectorStore:
         for i, metadata in enumerate(metadatas)
     ]
 
+    print(chunk_relationships)
+    # return
+    weighted_embeddings = self.embed_documents(
+      texts, metadatas, chunk_relationships)
+
     # Prepare vectors for upsert
     vectors = [
         {
             "id": id,
             "values": embedding,
-            "metadata": metadata
+            "metadata": self.enhance_metadata(
+                metadata,
+                relationship if chunk_relationships else None
+            )
         }
-        for i, (embedding, metadata, id) in enumerate(
-            zip(weighted_embeddings, metadatas, ids)
+        for i, (embedding, metadata, id, relationship) in enumerate(
+            zip(
+              weighted_embeddings,
+              metadatas,
+              ids,
+              (chunk_relationships if chunk_relationships else [
+               None] * len(ids))
+            )
         )
     ]
 
     upsert_response = self.index.upsert(vectors)
-
     return upsert_response
-
-    # vector_store = LangchainPinecone(
-    #   self.index,
-    #   weighted_embeddings,
-    #   "text"  # text field in metadata
-    # )
-
-    # result = vector_store.add_texts(
-    #   texts=texts,
-    #   metadatas=metadatas,
-    #   ids=ids
-    # )
 
   async def search_similar(
     self,
@@ -222,10 +318,8 @@ class VectorStore:
     # } for doc, score in results]
 
 
-async def embed_and_upsert(vector_store):
-  documents_path = '../../data/json/gin_lane_docs_v2.json'
-  with open(documents_path, 'r') as f:
-    data = json.load(f)
+async def embed_and_upsert(vector_store, data):
+
   result = await vector_store.upsert_documents(data)
   print(result)
 

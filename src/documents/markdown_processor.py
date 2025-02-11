@@ -1,8 +1,9 @@
 import re
 
-from langchain_community.document_loaders import UnstructuredMarkdownLoader
+# from langchain_community.document_loaders import UnstructuredMarkdownLoader
+
 from langchain.text_splitter import MarkdownHeaderTextSplitter
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from rich_media_text_splitter import RichMediaTextSplitter
 
 from langchain.docstore.document import Document
 
@@ -35,9 +36,9 @@ class MarkdownProcessor:
       # strip_headers=False
     )
 
-    self.text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=DEF_CHUNK_SIZE,
-        chunk_overlap=DEF_CHUNK_OVERLAP
+    self.media_splitter = RichMediaTextSplitter(
+      chunk_size=chunk_size,
+      chunk_overlap=chunk_overlap
     )
 
     with open(markdown_path, 'r', encoding='utf-8') as file:
@@ -76,21 +77,14 @@ class MarkdownProcessor:
     return '\n'.join(cleaned_lines).strip()
 
   def process_document(self):
-
-    # TODO
-    # Get Metadata from document name and filepath
-    # Get overall Chunk Metadata
-    # Get Chunk Priority
-
     content = self.clean_markdown(self.text)
     docs = self.markdown_splitter.split_text(content)
-    splits = self.text_splitter.split_documents(docs)
+    splits = self.media_splitter.split_documents(docs)
     return splits
-    # docs = self.markdown_splitter.split_text(self.data)
 
 
 if __name__ == "__main__":
-  markdown_path = "../../data/documents/case_studies/case_studies.md"
+  markdown_path = "../../data/projects/hims.md"
   markdown_processor = MarkdownProcessor(markdown_path)
   docs = markdown_processor.process_document()
 

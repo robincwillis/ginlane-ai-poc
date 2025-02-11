@@ -1,9 +1,10 @@
-from langchain_community.document_loaders import TextLoader, UnstructuredMarkdownLoader, JSONLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+import os
 from typing import List, Dict, Any
 import json
+
+from langchain_community.document_loaders import TextLoader, UnstructuredMarkdownLoader, JSONLoader
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from datetime import datetime, timezone
-import os
 from pathlib import Path
 import hashlib
 
@@ -13,7 +14,6 @@ from json_processor import JsonProcessor
 
 from document_utils import DocumentUtils
 
-
 DEF_CHUNK_SIZE = 500
 DEF_CHUNK_OVERLAP = 50
 
@@ -22,10 +22,12 @@ class DocumentChunker:
   def __init__(
     self,
     chunk_size: int = DEF_CHUNK_SIZE,
-    chunk_overlap: int = DEF_CHUNK_OVERLAP
+    chunk_overlap: int = DEF_CHUNK_OVERLAP,
+    supported_file_types: List[str] = ['.pdf', '.md', '.json', '.txt']
   ):
     self.chunk_size = chunk_size
     self.chunk_overlap = chunk_overlap
+    self.supported_file_types = supported_file_types
 
     # Initialize
     self.text_splitter = RecursiveCharacterTextSplitter(
@@ -35,53 +37,14 @@ class DocumentChunker:
       length_function=len
     )
 
-    self.config = DocumentUtils.load_from_json('../../data/config.json')
-
-  def get_subject_from_path(
-    self,
-    file_path: str,
-    base_dir: str
-  ) -> str:
-    """Extract subject from the directory structure"""
-    # Get relative path from base directory
-    rel_path = os.path.relpath(os.path.dirname(file_path), base_dir)
-    if rel_path == '.':
-      return None
-    subject = rel_path.replace(os.sep, '/').replace('_', ' ').title()
-    return subject
-
-  def get_directory_structure(self, base_dir: str) -> Dict:
-    """Create a dictionary representing the directory structure"""
-    structure = {}
-
-    for root, dirs, files in os.walk(base_dir):
-      # Get relative path
-      rel_path = os.path.relpath(root, base_dir)
-      current_dict = structure
-
-      # Skip the base directory
-      if rel_path != '.':
-        # Split path into parts
-        path_parts = rel_path.split(os.sep)
-
-        # Build nested dictionary
-        for part in path_parts:
-          if part not in current_dict:
-            current_dict[part] = {}
-          current_dict = current_dict[part]
-
-      # Add files
-      docs = [f for f in files if f.endswith(('.pdf', '.md'))]
-      if docs:
-        current_dict['documents'] = docs
-
-    return structure
+    self.config = DocumentUtils.load_from_json(
+      '../../data/document_config.json')
 
   def process_directory(
     self,
     directory_path: str
   ) -> Dict[str, Any]:
-    """Process all PDFs and Markdown files in a directory and its subdirectories"""
+    """Process all files in a directory and its subdirectories"""
 
     processed_docs = []
     subjects = set()
@@ -94,12 +57,13 @@ class DocumentChunker:
         file_path = os.path.join(root, file)
         file_ext = os.path.splitext(file)[1].lower()
 
-        if file_ext not in ['.pdf', '.md', '.json', '.txt']:
+        if file_ext not in self.supported_file_types:
           continue
 
-        subject = self.get_subject_from_path(file_path, base_dir)
+        subject = DocumentUtils.get_subject_from_path(file_path, base_dir)
 
-        processed_doc = self.process_document(file_path, file_ext, subject)
+        processed_doc = self.process_document(
+          file, file_path, file_ext, subject)
 
         if not processed_doc:
           print(f"Warn: didn't get a processed doc for {directory_path}")
@@ -110,7 +74,6 @@ class DocumentChunker:
 
         subjects.update(processed_doc["metadata"]["subjects"])
 
-    print(subjects)
     # Create dataset with directory structure information
     dataset = {
         "metadata": {
@@ -120,7 +83,7 @@ class DocumentChunker:
             "total_documents": len(processed_docs),
             "total_chunks": total_chunks,
             "subjects": sorted(list(subjects)),
-            "directory_structure": self.get_directory_structure(base_dir)
+            "directory_structure": DocumentUtils.get_directory_structure(base_dir)
         },
         "documents": processed_docs
     }
@@ -129,11 +92,22 @@ class DocumentChunker:
 
   def process_document(
     self,
+    file_name: str,
     file_path: str,
     file_ext: str,
     subject: str
   ) -> Dict[str, Any]:
     """Process a single document into chunks with metadata"""
+
+    content_type = None
+    priority = 0
+
+    for entry in self.config:
+      if entry['document'] == file_name:
+        priority = entry.get('priority', 0)
+        content_type = entry.get('content_type')
+        break
+
     try:
       match file_ext:
         case ".md":
@@ -149,10 +123,15 @@ class DocumentChunker:
           chunks = pdf_processor.process_document()
         case ".json":
           print("Processing JSON file...")
-          # loader = JSONLoader(file_path)
-          # doc = loader.load()
+          chunks = []
           json_processor = JsonProcessor(file_path)
-          chunks = json_processor.process_document()
+          if (content_type == "qa"):
+            chunks = json_processor.process_question_document()
+          elif (content_type == "services"):
+            chunks = json_processor.process_services_document()
+          else:
+            chunks = json_processor.process_document()
+
         case ".txt":
           print("Processing Text file...")
           loader = TextLoader(file_path)
@@ -165,15 +144,12 @@ class DocumentChunker:
     except Exception as e:
       print(f"Error processing {file_path}: {str(e)}")
 
-    # Extract basic metadata
-    # source_path = doc.metadata.get("source", "")
-    file_name = os.path.basename(file_path)
-    file_type = os.path.splitext(file_name)[1].lower()
-
-    # Process chunks with metadata
     processed_chunks = []
     unique_subjects = set()
 
+    if not chunks:
+      print(f"No chunks found {file_path}")
+    # Process chunks with metadata
     for i, doc in enumerate(chunks):
       chunk = doc.page_content
       metadata = doc.metadata
@@ -185,11 +161,6 @@ class DocumentChunker:
       # chunk_metrics = self.calculate_chunk_metrics(chunk)
 
       # Extra Metadata from config
-      priority = 0
-      for entry in self.config:
-        if entry['document'] == file_name:
-          priority = entry.get('priority')
-          break
 
       # get subjects from metadata
       # if subject, then add to subjects
@@ -208,7 +179,7 @@ class DocumentChunker:
         headings.extend(metadata['headings'])
       else:
         for i in range(1, 4):
-          heading_key = f'heading_{i}'
+          heading_key = f'header_{i}'
           if heading_key in metadata:
             headings.append(metadata[heading_key])
       # question
@@ -218,12 +189,14 @@ class DocumentChunker:
           "subjects": subjects,
           "headings": headings,
           "question": metadata.get('question'),
+          "services": [metadata.get('service')],
           "content": chunk,
           "metadata": {
               "chunk_number": i + 1,
               "char_length": len(chunk),
               "word_count": len(chunk.split()),
-              "priority": priority + metadata.get('priority_score', 0)
+              "priority": priority + metadata.get('priority_score', 0),
+              "related_chunks": metadata.get('related_chunks', [])
               # "metrics": chunk_metrics
           }
       })
@@ -232,7 +205,7 @@ class DocumentChunker:
     processed_doc = {
         "doc_id": hashlib.md5(file_name.encode()).hexdigest(),
         "file_name": file_name,
-        "file_type": file_type,
+        "file_type": file_ext,
         "chunks": processed_chunks,
         "metadata": {
             "source_path": file_path,
