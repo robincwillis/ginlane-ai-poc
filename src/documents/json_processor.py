@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 from langchain_core.documents import Document
 # from sklearn.feature_extraction.text import TfidfVectorizer
 
-from document_utils import DocumentUtils
+from documents.document_utils import DocumentUtils
 
 
 class JsonProcessor:

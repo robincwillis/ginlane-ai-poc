@@ -13,23 +13,23 @@ class MediaElement:
   type: str
   position: int
   url: str
-  alt: Optional[str] = None
+  # alt: Optional[str] = None
   text: Optional[str] = None
   metadata: Dict[str, Any] = None
 
 
 @dataclass
 class DocumentMetadata:
-  source_url: Optional[str] = None
   header_1: Optional[str] = None
   header_2: Optional[str] = None
   header_3: Optional[str] = None
-  title: Optional[str] = None
-  author: Optional[str] = None
-  publication_date: Optional[str] = None
-  last_modified: Optional[str] = None
+  source: Optional[str] = None
+  project_id: Optional[str] = None
+  client_id: Optional[str] = None
+  project_name: Optional[str] = None
+  content_type: Optional[str] = None
+  services: List[str] = None
   references: List[Dict[str, str]] = None
-  tags: List[str] = None
 
   def to_dict(self) -> Dict[str, Any]:
     return {k: v for k, v in self.__dict__.items() if v is not None}
@@ -88,7 +88,7 @@ class RichMediaTextSplitter:
             type='image',
             position=len(media_elements),
             url=match.group(2),
-            alt=match.group(1),
+            text=match.group(1),
             metadata={'content_type': 'image'}
         ))
         index = len(media_elements) - 1
@@ -122,7 +122,7 @@ class RichMediaTextSplitter:
     for element in media_elements:
       placeholder = f"{{{{MEDIA_{element.position}}}}}"
       if element.type == 'image':
-        replacement = f"![{element.alt or ''}]({element.url})"
+        replacement = f"![{element.text or ''}]({element.url})"
       else:  # link
         replacement = f"[{element.text or element.url}]({element.url})"
       text = text.replace(placeholder, replacement)
@@ -201,52 +201,49 @@ def format_chatbot_response(
   return formatted_response
 
 
-# Example usage
-# text_with_media_and_metadata = """
-# # Advanced Machine Learning Techniques
-
-# {meta_link: Official Documentation}[https://docs.example.com/ml]
-# {meta_link: Research Paper}[https://papers.example.com/advanced-ml]
-
-# Here's our architecture diagram: ![ML Pipeline](https://example.com/ml-pipeline.png)
-
-# For implementation details, check our [code repository](https://github.com/example/ml-code).
-
-# This approach is based on the groundbreaking work in [this paper](https://arxiv.org/example).
-
-# Here's another visualization: ![Results](https://example.com/results.jpg)
-# """
-
 if __name__ == "__main__":
   # Initialize splitter
   splitter = RichMediaTextSplitter(chunk_size=500, chunk_overlap=100)
-  markdown_path = '../../data/projects/hims.md'
-  # Create document metadata
-  doc_metadata = DocumentMetadata(
-      title="Advanced ML Techniques",
-      author="AI Research Team",
-      publication_date="2024-02-07",
-      tags=["machine-learning", "AI", "documentation"]
-  )
+
+  project_id = 'd678ce23'
+  markdown_path = '../../data/projects/camber.md'
+  project_config_path = '../../data/project_config.json'
 
   with open(markdown_path, 'r', encoding='utf-8') as file:
-    text_with_media_and_metadata = file.read()
+    project_doc = file.read()
+
+  with open(project_config_path, 'r', encoding='utf-8') as file:
+    project_config = json.load(file)
+
+  project = next(
+    (project for project in project_config if project['project_id'] == project_id), None)
+
+  print(project)
+  # Create document metadata
+  doc_metadata = DocumentMetadata(
+      source=markdown_path,
+      project_name=project['project_name'],
+      client_id=project['client_id'],
+      project_id=project['project_id'],
+      services=project['services']
+  )
 
   # Create chunks
-  chunks = splitter.create_chunks(text_with_media_and_metadata)
+  chunks = splitter.create_chunks(project_doc, doc_metadata)
 
   # Example of processing chunks for embedding and display
   for chunk in chunks:
     # The chunk.page_content contains the text with preserved markdown formatting
     # The chunk.metadata contains the media elements and document metadata
-    print(f"Chunk text: {chunk.page_content}")
+    print(f"Chunk text: --------")
+    print(chunk.page_content)
     print(f"Metadata: {json.dumps(chunk.metadata, indent=2)}")
 
-    # Format for display with references
-    formatted_response = format_chatbot_response(
-        chunk.page_content,
-        chunk.metadata,
-        include_media=True,
-        include_references=True
-    )
-    print(f"Formatted for display: {formatted_response}")
+    # # Format for display with references
+    # formatted_response = format_chatbot_response(
+    #   chunk.page_content,
+    #   chunk.metadata,
+    #   include_media=True,
+    #   include_references=True
+    # )
+    # print(f"Formatted for display: {formatted_response}")

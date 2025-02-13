@@ -53,7 +53,9 @@ class ChatBot:
             {
                 # "subject": result['metadata']['subject'],
                 "text": text,
-                "topics": metadata["subjects"],
+                "topics": metadata.get("subjects", []),
+                "services": metadata.get("services", []),
+                "tags": metadata.get("tags", []),
                 "priority": metadata["priority"],
                 "score": score,
             }
@@ -61,6 +63,15 @@ class ChatBot:
         ]
         df = pd.DataFrame(extracted_results)
         st.dataframe(df, use_container_width=True)
+
+      with st.expander("📖 Media"):
+        images = [
+          {
+            "count": total_media_elements
+          }
+          for metedata in search_results
+        ]
+      with st.expander("📖 References"):
 
       context = "\n".join(
         [f"{text}\n\n" for text, score, metadata in search_results])

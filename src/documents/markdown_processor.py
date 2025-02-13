@@ -3,11 +3,10 @@ import re
 # from langchain_community.document_loaders import UnstructuredMarkdownLoader
 
 from langchain.text_splitter import MarkdownHeaderTextSplitter
-from rich_media_text_splitter import RichMediaTextSplitter
-
 from langchain.docstore.document import Document
 
-from document_utils import DocumentUtils
+from documents.rich_media_text_splitter import RichMediaTextSplitter
+from documents.document_utils import DocumentUtils
 
 DEF_CHUNK_SIZE = 600
 DEF_CHUNK_OVERLAP = 40

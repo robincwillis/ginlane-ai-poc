@@ -76,6 +76,11 @@ class DocumentUtils:
     return structure
 
   @staticmethod
+  def generate_hex_id() -> str:
+    """Generate a unique hex identifier."""
+    return str(uuid.uuid4().hex[:8])
+
+  @staticmethod
   def generate_chunk_id() -> str:
     """Generate a unique chunk identifier."""
     return str(uuid.uuid4())

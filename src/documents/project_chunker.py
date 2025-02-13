@@ -8,10 +8,10 @@ from datetime import datetime, timezone
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from dataclasses import dataclass, field
 
-from markdown_processor import MarkdownProcessor
-from json_processor import JsonProcessor
+from documents.markdown_processor import MarkdownProcessor
+from documents.json_processor import JsonProcessor
 
-from document_utils import DocumentUtils
+from documents.document_utils import DocumentUtils
 
 
 DEF_CHUNK_SIZE = 1000
@@ -30,8 +30,7 @@ class ProjectType(Enum):
 class ClientMetadata:
   client_id: str
   client_name: str
-  industry: str
-  tags: List[str] = field(default_factory=list)
+  categories: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -42,7 +41,7 @@ class ProjectMetadata:
   project_type: ProjectType
   services: List[str] = field(default_factory=list)
   technologies: List[str] = field(default_factory=list)
-  tags: List[str] = field(default_factory=list)
+  categories: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -54,6 +53,8 @@ class ServiceMetadata:
 class ProjectChunker:
   def __init__(
     self,
+    project_config_file,
+    client_config_file,
     chunk_size: int = DEF_CHUNK_SIZE,
     chunk_overlap: int = DEF_CHUNK_OVERLAP,
     supported_file_types: List[str] = ['.md', '.json']
@@ -70,14 +71,8 @@ class ProjectChunker:
       length_function=len
     )
 
-    self.document_config = DocumentUtils.load_from_json(
-      '../../data/document_config.json')
-    self.project_config = DocumentUtils.load_from_json(
-      '../../data/project_config.json')
-
-    self.client_config = DocumentUtils.load_from_json(
-      '../../data/client_config.json'
-    )
+    self.project_config = DocumentUtils.load_from_json(project_config_file)
+    self.client_config = DocumentUtils.load_from_json(client_config_file)
 
   def process_directory(
     self,
@@ -149,6 +144,7 @@ class ProjectChunker:
 
     if not doc_config:
       print(f"Warn: No project config found for {file_name}")
+      print(self.project_config)
       return None, None  # Return explicit None values to indicate failure
 
     # Find the client config that includes the project's ID
@@ -180,11 +176,11 @@ class ProjectChunker:
     try:
       match file_ext:
         case ".md":
-          print("Processing Markdown File...")
+          # print("Processing Markdown File...")
           markdown_processor = MarkdownProcessor(file_path)
           chunks = markdown_processor.process_document()
         case ".json":
-          print("Processing JSON File...")
+          # print("Processing JSON File...")
           json_processor = JsonProcessor(file_path)
           chunks = json_processor.process_document()
 
@@ -210,10 +206,6 @@ class ProjectChunker:
           (doc_config.get("services", []) if doc_config else []) +
           (client_config.get("services", []) if client_config else [])
       ))
-      tags = list(set(
-          (doc_config.get("tags", []) if doc_config else []) +
-          (client_config.get("tags", []) if client_config else [])
-      ))
 
       # get headings from metadata
       unique_services.update(services)
@@ -236,16 +228,17 @@ class ProjectChunker:
         "chunk_id": chunk_id,
         "services": services,
         "headings": headings,
-        "tags": tags,
         "content": chunk,
         "technologies": doc_config["technologies"],
         "project_id": doc_config["project_id"],
         "project_name": doc_config["project_name"],
         "client_id": doc_config["client_id"],
+        "content_type": doc_config["content_type"],
         "client_name": client_config["client_name"],
-        "industry": client_config["industry"],
+        "categories": client_config["categories"],
         "chunk_number": i + 1,
         "metadata": {
+          "source": file_name,
           "char_length": len(chunk),
           "word_count": len(chunk.split()),
           "priority": priority + metadata.get('priority_score', 0),
@@ -269,20 +262,3 @@ class ProjectChunker:
           }
 
     return processed_doc
-
-
-if __name__ == "__main__":
-  chunker = ProjectChunker()
-  dataset = chunker.process_directory("../../data/projects")
-  timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-  file_name = f"gin_lane_projects_v1_{timestamp}.json"
-
-  DocumentUtils.save_to_json(dataset, f"../../data/json/{file_name}")
-
-  # Print summary
-  print("\nProcessing Summary:")
-  print(f"Total Documents: {dataset['metadata']['total_documents']}")
-  print(f"Total Chunks: {dataset['metadata']['total_chunks']}")
-  print("\nClients found:")
-  for client in dataset['metadata']['clients']:
-    print(f"- {client}")

@@ -4,8 +4,9 @@ from typing import List, Dict, Any
 from langchain_core.documents import Document
 from langchain_community.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from document_utils import DocumentUtils
 from dataclasses import dataclass
+
+from documents.document_utils import DocumentUtils
 
 
 @dataclass

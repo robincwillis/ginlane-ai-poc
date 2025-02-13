@@ -8,19 +8,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 import hashlib
 
-from markdown_processor import MarkdownProcessor
-from pdf_processor import PdfProcessor
-from json_processor import JsonProcessor
+from documents.markdown_processor import MarkdownProcessor
+from documents.pdf_processor import PdfProcessor
+from documents.json_processor import JsonProcessor
 
-from document_utils import DocumentUtils
+from documents.document_utils import DocumentUtils
 
-DEF_CHUNK_SIZE = 500
-DEF_CHUNK_OVERLAP = 50
+from config import DEF_CHUNK_OVERLAP, DEF_CHUNK_SIZE
 
 
 class DocumentChunker:
   def __init__(
     self,
+    document_config_file: str,
     chunk_size: int = DEF_CHUNK_SIZE,
     chunk_overlap: int = DEF_CHUNK_OVERLAP,
     supported_file_types: List[str] = ['.pdf', '.md', '.json', '.txt']
@@ -37,8 +37,7 @@ class DocumentChunker:
       length_function=len
     )
 
-    self.config = DocumentUtils.load_from_json(
-      '../../data/document_config.json')
+    self.config = DocumentUtils.load_from_json(document_config_file)
 
   def process_directory(
     self,
@@ -182,16 +181,17 @@ class DocumentChunker:
           heading_key = f'header_{i}'
           if heading_key in metadata:
             headings.append(metadata[heading_key])
-      # question
 
-      processed_chunks.append({
+      if chunk:
+        processed_chunks.append({
           "chunk_id": chunk_id,
           "subjects": subjects,
           "headings": headings,
           "question": metadata.get('question'),
-          "services": [metadata.get('service')],
+          "services": [metadata.get('service')] if metadata.get('service') is not None else [],
           "content": chunk,
           "metadata": {
+              "source": file_name,
               "chunk_number": i + 1,
               "char_length": len(chunk),
               "word_count": len(chunk.split()),
@@ -199,9 +199,11 @@ class DocumentChunker:
               "related_chunks": metadata.get('related_chunks', [])
               # "metrics": chunk_metrics
           }
-      })
+        })
+      else:
+        print(f"Empty chunk in {file_path}")
 
-    # Create document entry
+        # Create document entry
     processed_doc = {
         "doc_id": hashlib.md5(file_name.encode()).hexdigest(),
         "file_name": file_name,
@@ -217,33 +219,3 @@ class DocumentChunker:
     }
 
     return processed_doc
-
-  # def evaluate_chunks():
-
-
-if __name__ == "__main__":
-
-  chunker = DocumentChunker(
-      chunk_size=500,
-      chunk_overlap=50
-  )
-
-  dataset = chunker.process_directory("../../data/documents")
-
-  timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-  file_name = f"gin_lane_docs_v2_{timestamp}.json"
-
-  DocumentUtils.save_to_json(dataset, f"../../data/json/{file_name}")
-
-  # Print summary
-  print("\nProcessing Summary:")
-  print(f"Total Documents: {dataset['metadata']['total_documents']}")
-  print(f"Total Chunks: {dataset['metadata']['total_chunks']}")
-  print("\nSubjects found:")
-  for subject in dataset['metadata']['subjects']:
-    print(f"- {subject}")
-
-  # evaluation = chunker.evaluate_chunks(dataset)
-
-  # with open("./evaluation/chunk_evaluation.json", "w") as f:
-  #     json.dump(evaluation, f, indent=2)
