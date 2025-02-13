@@ -50,7 +50,7 @@ class VectorStore:
   def __init__(
     self,
     index_name: str,
-    debug_output_file: str,
+    debug_output_file: str = None,
     pinecone_api_key: str = os.getenv("PINECONE_API_KEY"),
     voyage_api_key: str = os.getenv("VOYAGE_API_KEY"),
     dimension: int = 1024,  # Voyage AI's default dimension
@@ -347,7 +347,10 @@ class VectorStore:
         for vector in vectors
       ]
       # save vectors sans values
-      DocumentUtils.save_to_json(debug, self.debug_output_file)
+      if self.debug_output_file:
+        DocumentUtils.save_to_json(debug, self.debug_output_file)
+      else:
+        print("Warn: No debug output file")
       return debug
     else:
       def segment_list(lst: List[Any], segment_size: int):

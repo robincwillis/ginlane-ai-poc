@@ -172,7 +172,46 @@ def context_manager(contexts):
     delete_context(key)
 
 
+def create_markdown_media_summary(images, links, references):
+  """
+  Create a markdown-formatted summary of all media items.
+  """
+  summary_parts = []
+
+  # Add double newline before starting media summary
+  if any([images, links, references]):
+    summary_parts.append("\n\n")
+
+  # Add images section if there are any
+  if images:
+    summary_parts.append("🖼️ **Images**\n")
+    for img in images:
+        # Format as markdown image with link
+      summary_parts.append(f"[![{img['text']}]({img['url']})]({img['url']})\n")
+      summary_parts.append(f"*{img['text']}*\n\n")
+
+  # Add links section if there are any
+  if links:
+    summary_parts.append("🔗 **Links**\n")
+    for link in links:
+      # Format as markdown link with description
+      summary_parts.append(f"* [{link['text']}]({link['url']})\n")
+    summary_parts.append("\n")
+
+  # Add references section if there are any
+  if references:
+    summary_parts.append("📖 **References**\n")
+    for ref in references:
+      # Format as markdown link with description
+      summary_parts.append(f"* [{ref['text']}]({ref['url']})\n")
+    summary_parts.append("\n")
+
+  return "".join(summary_parts)
+
+
 def handle_stream_response(stream_response):
+
+  # create_markdown_media_summary()
   """Handle the streaming response and UI updates"""
   try:
     # Use write_stream to handle the streaming content
@@ -180,7 +219,20 @@ def handle_stream_response(stream_response):
       full_response = st.write_stream(
           (chunk.delta.text for chunk in stream if chunk.type == "content_block_delta")
       )
-    return full_response
+
+    if full_response is not None:
+      st.session_state.display_messages.append({
+          "role": "assistant",
+          "content": full_response
+      })
+      st.session_state.api_messages.append({
+          "role": "assistant",
+          "content": full_response
+      })
+
+  except Exception as e:
+    st.error(f"handle_stream_response:error: {str(e)}")
+    return None
 
     # For Debugging
     # with stream_response as stream:
@@ -194,10 +246,6 @@ def handle_stream_response(stream_response):
     #       st.write(f"Chunk received: {text_chunk}")
     #       print(f"Chunk received: {text_chunk}")
     #   return full_response
-
-  except Exception as e:
-    st.error(f"handle_stream_response:error: {str(e)}")
-    return None
 
 
 async def main():
@@ -216,7 +264,6 @@ async def main():
   chatbot = initialize_chatbot()
   context_manager(contexts)
 
-  logging.info(st.session_state.display_messages)
   for message in st.session_state.display_messages:
     # ignore tool use blocks
     if isinstance(message["content"], str):
@@ -234,19 +281,23 @@ async def main():
         logging.info(user_msg)
         logging.info(st.session_state.filter)
 
-        stream_response = await chatbot.process_user_input(user_msg, st.session_state.filter)
-        full_response = handle_stream_response(stream_response)
+        stream_response, images, links, references = await chatbot.process_user_input(user_msg, st.session_state.filter)
 
-        # Update chat history if response was successful
-        if full_response is not None:
-          st.session_state.display_messages.append({
-              "role": "assistant",
-              "content": full_response
-          })
-          st.session_state.api_messages.append({
-              "role": "assistant",
-              "content": full_response
-          })
+        if images or links or references:
+          main_col, media_col = st.columns([2, 1])
+
+          with media_col:
+            media_container = st.empty()
+            media_summary = create_markdown_media_summary(
+              images, links, references)
+            if media_summary.strip():
+              media_container.markdown(media_summary)
+
+          with main_col:
+            handle_stream_response(stream_response)
+
+        else:
+          handle_stream_response(stream_response)
 
 
 if __name__ == "__main__":

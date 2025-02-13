@@ -42,10 +42,70 @@ class ChatBot:
     except Exception as e:
       return {"error": str(e)}
 
+  def get_media(self, search_results):
+    images = []
+    links = []
+    references = []
+    # Process media items if they exist
+    for search_result in search_results:
+      _, _, metadata = search_result
+      # Extract metadata links with pattern {meta_link: description}[url]
+      media_urls = metadata.get('media_urls', [])
+      media_types = metadata.get('media_types', [])
+      media_texts = metadata.get('media_texts', [])
+
+      # Ensure all media lists have the same length by padding with None if necessary
+      max_media_length = max(
+        len(media_urls), len(media_types), len(media_texts))
+      media_urls = media_urls + [None] * (max_media_length - len(media_urls))
+      media_types = media_types + [None] * \
+          (max_media_length - len(media_types))
+      media_texts = media_texts + [None] * \
+          (max_media_length - len(media_texts))
+
+      for i, (url, media_type, text) in enumerate(zip(media_urls, media_types, media_texts)):
+        if url and media_type == 'image':
+          images.append({
+            'type': 'image',
+            'position': i,
+            'url': url,
+            'text': text or ''  # Use empty string if text is None
+          })
+        elif url and media_type == 'link':
+          links.append({
+            'type': 'link',
+            'position': i,
+            'url': url,
+            'text': text or ''  # Use empty string if text is None
+          })
+
+      reference_descriptions = metadata.get('reference_descriptions', [])
+      reference_urls = metadata.get('reference_urls', [])
+
+      max_reference_length = max(
+        len(reference_urls), len(reference_descriptions))
+      reference_urls = reference_urls + \
+          [None] * (max_reference_length - len(reference_urls))
+      reference_descriptions = reference_descriptions + \
+          [None] * (max_reference_length - len(reference_descriptions))
+
+    for i, (url, description) in enumerate(zip(reference_urls, reference_descriptions)):
+      if url:  # Only add if URL exists
+        references.append({
+            'type': 'reference',
+            'position': i,
+            'url': url,
+            'text': description or ''  # Use empty string if text is None
+        })
+
+    return (images, links, references)
+
   async def get_context(self, search_input, filter):
     clean_filter = {k: v for k, v in filter.items() if v is not None}
     search_results = await self.vector_store.search_similar(search_input, filter=clean_filter)
     if search_results:
+      images, links, references = self.get_media(search_results)
+
       with st.expander("📕 Relevant Documents"):
         logging.info(search_results)
         st.json(search_results, expanded=False)
@@ -55,8 +115,9 @@ class ChatBot:
                 "text": text,
                 "topics": metadata.get("subjects", []),
                 "services": metadata.get("services", []),
-                "tags": metadata.get("tags", []),
+                "categories": metadata.get("categories", []),
                 "priority": metadata["priority"],
+                "source": metadata["source"],
                 "score": score,
             }
             for text, score, metadata in search_results
@@ -64,14 +125,17 @@ class ChatBot:
         df = pd.DataFrame(extracted_results)
         st.dataframe(df, use_container_width=True)
 
-      with st.expander("📖 Media"):
-        images = [
-          {
-            "count": total_media_elements
-          }
-          for metedata in search_results
-        ]
-      with st.expander("📖 References"):
+      if images or links:
+        with st.expander("🖌️ Media"):
+          image_df = pd.DataFrame(images)
+          st.dataframe(image_df, use_container_width=True)
+          link_df = pd.DataFrame(links)
+          st.dataframe(link_df, use_container_width=True)
+
+      if references:
+        with st.expander("📖 References"):
+          df = pd.DataFrame(references)
+          st.dataframe(references, use_container_width=True)
 
       context = "\n".join(
         [f"{text}\n\n" for text, score, metadata in search_results])
@@ -84,13 +148,13 @@ class ChatBot:
     else:
       context = "No relevant documents found."
 
-    return context
+    return context, images, links, references
 
   async def process_user_input(self, user_input, filter):
     self.session_state.display_messages.append(
       {"role": "user", "content": user_input})
 
-    context_text = await self.get_context(user_input, filter)
+    context_text, images, links, references = await self.get_context(user_input, filter)
 
     # Include the response from the vector database as context for the LLM
     context_message = {"role": "user", "content": (
@@ -113,7 +177,7 @@ class ChatBot:
       st.error(f"Error: {stream_response['error']}")
       return f"process_user_input: Error: {stream_response['error']}"
 
-    return stream_response
+    return stream_response, images, links, references
 
   def handle_tool_use(self, func_name, func_params):
     if func_name == "get_quote":
