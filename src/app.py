@@ -16,8 +16,8 @@ def initialize_contexts() -> Dict[str, str]:
   if 'contexts' not in st.session_state:
     st.session_state.contexts = {
         'greeting_and_general': STATIC_GREETINGS_AND_GENERAL,
-        'contact': CONTACT,
-        'termonology': TERMS,
+        # 'contact': CONTACT,
+        # 'termonology': TERMS,
         # 'guard_rails': ADDITIONAL_GUARDRAILS,
     }
   if 'topics' not in st.session_state:

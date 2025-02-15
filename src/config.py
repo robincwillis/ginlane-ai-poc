@@ -74,6 +74,16 @@ Little Plains, offers the following services:
 * Rendering
 
 </static_context>
+<contact>
+Little Plains
+a branding and experience design studio for consumer-centric, tech-enabled startups.
+
+📍 New York, NY
+🌐 [www.littleplains.co](https://www.littleplains.co/)
+📧 [hello@littleplains.co](mailto:hello@littleplains.co)
+
+Whether you're looking to refine your brand, build a digital product, or explore AI-driven creativity, we’d love to chat. Reach out and let’s create something exceptional together.
+</contact>
 """
 
 SERVICES = [
