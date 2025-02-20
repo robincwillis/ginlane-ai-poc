@@ -8,15 +8,13 @@ import streamlit as st
 import json
 import pandas as pd
 
-from config import MODEL, TOOLS
+from config import MODEL, SEARCH_K
 from agent.tools import get_quote
 
 from vectorstore.vector_store import VectorStore
 
 # Load environment variables from .env file
 load_dotenv()
-
-SEARCH_K = 75
 
 
 class ChatBot:

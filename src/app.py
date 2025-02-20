@@ -3,7 +3,7 @@ from typing import Dict
 import uuid
 import streamlit as st
 from agent.chatbot import ChatBot
-from config import IDENTITY, INDEX, TOPICS, STATIC_GREETINGS_AND_GENERAL, TERMS, CONTACT, ADDITIONAL_GUARDRAILS
+from config import MODEL, IDENTITY, INDEX, TOPICS, STATIC_GREETINGS_AND_GENERAL, SEARCH_K
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -168,6 +168,9 @@ def context_manager(contexts):
           if st.button("🗑️", key=f"delete_{key}", use_container_width=True):
             keys_to_remove.append(key)
 
+    st.write(f"Model: {MODEL}")
+    st.write(f"Index: {INDEX}")
+    st.write(f"Search K: {SEARCH_K}")
   for key in keys_to_remove:
     delete_context(key)
 
