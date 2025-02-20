@@ -1,0 +1,16 @@
+# Ignore logs, large datasets, and temp files
+
+data/
+scripts/
+scrap/
+notebooks/
+*.csv
+*.json
+*.log
+*.md
+*.pdf
+
+# Ignore Python cache and virtual environment
+__pycache__/
+venv/
+.env
