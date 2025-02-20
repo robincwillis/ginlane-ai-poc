@@ -16,6 +16,8 @@ from vectorstore.vector_store import VectorStore
 # Load environment variables from .env file
 load_dotenv()
 
+SEARCH_K = 75
+
 
 class ChatBot:
   def __init__(self, identity, index, session_state):
@@ -102,7 +104,7 @@ class ChatBot:
 
   async def get_context(self, search_input, filter):
     clean_filter = {k: v for k, v in filter.items() if v is not None}
-    search_results = await self.vector_store.search_similar(search_input, filter=clean_filter)
+    search_results = await self.vector_store.search_similar(search_input, SEARCH_K, filter=clean_filter)
     if search_results:
       images, links, references = self.get_media(search_results)
 
@@ -158,9 +160,9 @@ class ChatBot:
 
     # Include the response from the vector database as context for the LLM
     context_message = {"role": "user", "content": (
-        f"Based on the following context, please provide a response to the user's question. "
-        f"Context: <context>{context_text}<context>\n\n"
-        f"User's question: <question>{user_input}</question>"
+        f"Answer the following question as clearly and naturally as possible, using the relevant details below.\n\n"
+        f"{context_text}\n\n"
+        f"Question: {user_input}"
     )}
 
     with st.expander("🧩 Prompt with Context"):

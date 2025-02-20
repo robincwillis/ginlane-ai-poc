@@ -25,12 +25,12 @@ def initialize_contexts() -> Dict[str, str]:
     st.session_state.topic_filter = "All"
 
   if 'priority_filter' not in st.session_state:
-    st.session_state.priority_filter = 0.5
+    st.session_state.priority_filter = 0.3
 
   if 'filter' not in st.session_state:
     st.session_state.filter = {
       "subjects": None,
-      "priority": {"$gte": 0.5}
+      "priority": {"$gte": 0.3}
     }
 
   return st.session_state.contexts

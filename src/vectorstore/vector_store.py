@@ -375,7 +375,7 @@ class VectorStore:
 
   async def search_similar(
     self,
-      query: str,
+    query: str,
     k: int = 5,
     filter=None,
     rerank=True,
