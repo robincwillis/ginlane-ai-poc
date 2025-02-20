@@ -1,0 +1,6 @@
+jupyter
+jupyter_contrib_nbextensions
+numpy
+pandas
+matplotlib
+requests
