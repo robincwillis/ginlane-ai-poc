@@ -8,7 +8,7 @@ import streamlit as st
 import json
 import pandas as pd
 
-from config import MODEL, SEARCH_K
+from config import MODEL, SEARCH_K, MAX_TOKENS, STATIC_GREETINGS_AND_GENERAL
 from agent.tools import get_quote
 
 from vectorstore.vector_store import VectorStore
@@ -25,7 +25,7 @@ class ChatBot:
     self.vector_store = VectorStore(index_name=index)
     # self.vector_db.load_db() # For local dev
 
-  def generate_message(
+  def stream_message(
     self,
     messages,
     max_tokens
@@ -37,6 +37,22 @@ class ChatBot:
         max_tokens=max_tokens,
         messages=messages,
         # tools=TOOLS
+      )
+      return response
+    except Exception as e:
+      return {"error": str(e)}
+
+  def create_message(
+    self,
+    messages,
+    max_tokens
+  ):
+    try:
+      response = self.anthropic.messages.create(
+        model=MODEL,
+        system=self.identity,
+        max_tokens=max_tokens,
+        messages=messages,
       )
       return response
     except Exception as e:
@@ -150,6 +166,29 @@ class ChatBot:
 
     return context, images, links, references
 
+  async def process_eval_input(self, input, filter):
+    context_text, images, links, references = await self.get_context(input, filter)
+
+    context_message = {"role": "user", "content": (
+        f"Answer the following question as clearly and naturally as possible, using the relevant details below.\n\n"
+        f"{context_text}\n\n"
+        f"Question: {input}"
+    )}
+
+    messages = [
+        {'role': "user", "content": STATIC_GREETINGS_AND_GENERAL},
+        {'role': "assistant", "content": "Understood"}
+    ]
+
+    messages.append(context_message)
+
+    response = self.create_message(
+      messages=messages,
+      max_tokens=MAX_TOKENS
+    )
+
+    return response
+
   async def process_user_input(self, user_input, filter):
     self.session_state.display_messages.append(
       {"role": "user", "content": user_input})
@@ -168,9 +207,9 @@ class ChatBot:
 
     self.session_state.api_messages.append(context_message)
 
-    stream_response = self.generate_message(
+    stream_response = self.stream_message(
       messages=self.session_state.api_messages,
-      max_tokens=2048
+      max_tokens=MAX_TOKENS
     )
 
     if isinstance(stream_response, dict) and "error" in stream_response:

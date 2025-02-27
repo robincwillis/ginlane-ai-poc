@@ -213,15 +213,30 @@ def create_markdown_media_summary(images, links, references):
 
 
 def handle_stream_response(stream_response):
+  """Handle the streaming response and UI updates"""
+
+  input_tokens, output_tokens = 0, 0  # Initialize token counters
+  first_chunk = None  # To store the last chunk for token usage
 
   # create_markdown_media_summary()
-  """Handle the streaming response and UI updates"""
   try:
     # Use write_stream to handle the streaming content
-    with stream_response as stream:
-      full_response = st.write_stream(
-          (chunk.delta.text for chunk in stream if chunk.type == "content_block_delta")
-      )
+    #     with stream_response as stream:
+    #       full_response = st.write_stream(
+    #           (chunk.delta.text for chunk in stream if chunk.type == "content_block_delta")
+    #       )
+
+    def stream_and_capture():
+      nonlocal first_chunk
+      with stream_response as stream:
+        for chunk in stream:
+          if chunk.type == "content_block_delta":
+            yield chunk.delta.text
+          if first_chunk is None:  # Capture the first chunk for token usage
+            first_chunk = chunk
+        # Stream the response while capturing the last chunk
+    full_response = st.write_stream(stream_and_capture())
+    st.write(first_chunk)
 
     if full_response is not None:
       st.session_state.display_messages.append({
@@ -232,6 +247,12 @@ def handle_stream_response(stream_response):
           "role": "assistant",
           "content": full_response
       })
+
+      if first_chunk and hasattr(first_chunk, "usage"):
+        input_tokens = first_chunk.usage.input_tokens
+        output_tokens = first_chunk.usage.output_tokens
+        st.write(f"🔢 **Input Tokens:** {input_tokens}")
+        st.write(f"🔢 **Output Tokens:** {output_tokens}")
 
   except Exception as e:
     st.error(f"handle_stream_response:error: {str(e)}")
