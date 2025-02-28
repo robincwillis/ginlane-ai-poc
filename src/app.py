@@ -236,7 +236,8 @@ def handle_stream_response(stream_response):
             first_chunk = chunk
         # Stream the response while capturing the last chunk
     full_response = st.write_stream(stream_and_capture())
-    st.write(first_chunk)
+    # TODO Debug mode
+    # st.write(first_chunk)
 
     if full_response is not None:
       st.session_state.display_messages.append({
