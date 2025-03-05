@@ -138,6 +138,10 @@ class ChatBot:
     if search_results:
       images, links, references = self.get_media(search_results)
 
+      with st.expander("🧠 Identity"):
+        logging.info(self.identity)
+        st.write(self.identity)
+
       with st.expander("📕 Relevant Documents"):
         logging.info(search_results)
         st.json(search_results, expanded=False)

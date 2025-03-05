@@ -50,11 +50,6 @@ def initialize_session_state():
 async def initialize_chatbot():
   initialize_session_state()
 
-  # if 'api_messages' not in st.session_state:
-  #   st.session_state.api_messages = [
-  #     {'role': "user", "content": combine_contexts()},
-  #     {'role': "assistant", "content": "Understood"},
-  #  ]
   # Reinitialize chatbot with new identity
   chatbot = ChatBot(st.session_state.identity, INDEX, st.session_state)
 
@@ -144,8 +139,8 @@ def context_manager(contexts):
       if st.button("Reset Conversation"):
         # Reset session and reinitialize
         st.session_state.initialized = False
-        # Create a new event loop for this synchronous context
-        # st.session_state.chatbot.reset_conversation(combine_contexts())
+        if 'chatbot' in st.session_state:
+          del st.session_state.chatbot
         st.rerun()
 
     st.header("Agent Context")
@@ -167,8 +162,8 @@ def context_manager(contexts):
         if identity_changed:
           st.session_state.identity = new_identity
           st.session_state.initialized = False
-
-          initialize_chatbot()
+          if 'chatbot' in st.session_state:
+            del st.session_state.chatbot
           st.toast("Identity updated and chat state reset!", icon="✅")
 
     # Container for context editors
@@ -202,7 +197,9 @@ def context_manager(contexts):
           ):
             if context_changed:
               st.session_state.contexts[key] = new_context
-              # await initialize_chatbot()
+              st.session_state.initialized = False
+              if 'chatbot' in st.session_state:
+                del st.session_state.chatbot
               st.toast("Context updated and chat state reset!", icon="✅")
 
         with col3:
@@ -352,9 +349,9 @@ async def main():
   )
 
   contexts = initialize_contexts()
-  # chatbot = initialize_chatbot()
   if 'chatbot' not in st.session_state:
     st.session_state.chatbot = await initialize_chatbot()
+    st.toast("Init Chatbot!", icon="✅")
 
   context_manager(contexts)
 
