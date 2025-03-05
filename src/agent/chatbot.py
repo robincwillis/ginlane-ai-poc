@@ -4,14 +4,16 @@ import os
 from dotenv import load_dotenv
 from anthropic import Anthropic
 import logging
+import asyncio
 import streamlit as st
 import json
 import pandas as pd
 
-from config import MODEL, SEARCH_K, MAX_TOKENS, STATIC_GREETINGS_AND_GENERAL
+from config import MODEL, SEARCH_K, MAX_TOKENS, STATIC_GREETINGS_AND_GENERAL, MAX_INPUT_TOKENS_PER_MINUTE, TOKEN_BUFFER
 from agent.tools import get_quote
 
 from vectorstore.vector_store import VectorStore
+from agent.session_manager import SessionManager
 
 # Load environment variables from .env file
 load_dotenv()
@@ -22,19 +24,36 @@ class ChatBot:
     self.anthropic = Anthropic()
     self.session_state = session_state
     self.identity = identity
+    self.max_tokens = MAX_TOKENS
     self.vector_store = VectorStore(index_name=index)
     # self.vector_db.load_db() # For local dev
+    self.session_manager = SessionManager(
+      anthropic_client=self.anthropic,
+      model=MODEL,
+      # Adjust this based on your API plan limits
+      max_tokens=MAX_INPUT_TOKENS_PER_MINUTE,
+      token_buffer=TOKEN_BUFFER,  # Buffer before trimming history
+      system_prompt=self.identity,
+      session_state=session_state
+    )
 
-  def stream_message(
-    self,
-    messages,
-    max_tokens
-  ):
+  async def initialize_conversation(self, greeting):
+    """Initialize the conversation with system greeting and assistant acknowledgment."""
+    if not hasattr(self.session_state, 'initialized') or not self.session_state.initialized:
+      await self.session_manager.add_message("user", greeting, add_to_api=True, add_to_display=False)
+      await self.session_manager.add_message("assistant", "Understood", add_to_api=True, add_to_display=False)
+      self.session_state.initialized = True
+    return self
+
+  def stream_message(self):
     try:
+
+      messages = self.session_manager.get_api_messages()
+
       response = self.anthropic.messages.stream(
         model=MODEL,
         system=self.identity,
-        max_tokens=max_tokens,
+        max_tokens=self.max_tokens,
         messages=messages,
         # tools=TOOLS
       )
@@ -42,16 +61,13 @@ class ChatBot:
     except Exception as e:
       return {"error": str(e)}
 
-  def create_message(
-    self,
-    messages,
-    max_tokens
-  ):
+  def create_message(self):
     try:
+      messages = self.session_manager.get_api_messages()
       response = self.anthropic.messages.create(
         model=MODEL,
         system=self.identity,
-        max_tokens=max_tokens,
+        max_tokens=self.max_tokens,
         messages=messages,
       )
       return response
@@ -182,16 +198,15 @@ class ChatBot:
 
     messages.append(context_message)
 
-    response = self.create_message(
-      messages=messages,
-      max_tokens=MAX_TOKENS
-    )
+    response = self.create_message()
 
     return response
 
   async def process_user_input(self, user_input, filter):
-    self.session_state.display_messages.append(
-      {"role": "user", "content": user_input})
+    # self.session_state.display_messages.append(
+    #   {"role": "user", "content": user_input})
+
+    await self.session_manager.add_message("user", user_input, add_to_api=False, add_to_display=True)
 
     context_text, images, links, references = await self.get_context(user_input, filter)
 
@@ -205,12 +220,16 @@ class ChatBot:
     with st.expander("🧩 Prompt with Context"):
       st.write(context_message['content'])
 
-    self.session_state.api_messages.append(context_message)
-
-    stream_response = self.stream_message(
-      messages=self.session_state.api_messages,
-      max_tokens=MAX_TOKENS
+    # self.session_state.api_messages.append(context_message)
+    await self.session_manager.add_message(
+        role=context_message["role"],
+        content=context_message["content"],
+        add_to_api=True,
+        add_to_display=False,
+        is_context=True
     )
+
+    stream_response = self.stream_message()
 
     if isinstance(stream_response, dict) and "error" in stream_response:
       st.error(f"Error: {stream_response['error']}")
@@ -224,3 +243,12 @@ class ChatBot:
       return f"Quote generated: ${premium: .2f} per month"
 
     raise Exception(f"An unexpected tool was used: {func_name}")
+
+  async def reset_conversation(self, greeting):
+    """Reset the conversation history."""
+    await self.session_manager.reset()
+    await self.initialize_conversation(greeting)
+
+  def get_token_stats(self):
+    """Get current token usage statistics."""
+    return self.session_manager.get_stats()

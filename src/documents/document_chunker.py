@@ -187,6 +187,7 @@ class DocumentChunker:
           "chunk_id": chunk_id,
           "subjects": subjects,
           "headings": headings,
+          "content_type": content_type,
           "question": metadata.get('question'),
           "services": [metadata.get('service')] if metadata.get('service') is not None else [],
           "content": chunk,

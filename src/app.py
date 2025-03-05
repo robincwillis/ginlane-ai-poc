@@ -1,10 +1,11 @@
 
-from typing import Dict
+from typing import Dict, List, Any, Optional
 import uuid
+import logging
+import asyncio
 import streamlit as st
 from agent.chatbot import ChatBot
 from config import MODEL, IDENTITY, INDEX, TOPICS, STATIC_GREETINGS_AND_GENERAL, SEARCH_K
-import logging
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,9 +17,6 @@ def initialize_contexts() -> Dict[str, str]:
   if 'contexts' not in st.session_state:
     st.session_state.contexts = {
         'greeting_and_general': STATIC_GREETINGS_AND_GENERAL,
-        # 'contact': CONTACT,
-        # 'termonology': TERMS,
-        # 'guard_rails': ADDITIONAL_GUARDRAILS,
     }
   if 'topics' not in st.session_state:
     st.session_state.topics = TOPICS
@@ -36,19 +34,34 @@ def initialize_contexts() -> Dict[str, str]:
   return st.session_state.contexts
 
 
-def initialize_chatbot():
-  if 'display_messages' not in st.session_state:
+def initialize_session_state():
+  if "display_messages" not in st.session_state:
     st.session_state.display_messages = []
+  if "api_messages" not in st.session_state:
+    st.session_state.api_messages = []
+  if "token_usage" not in st.session_state:
+    st.session_state.token_usage = 0
+  if "message_tokens" not in st.session_state:
+    st.session_state.message_tokens = []
+  if "initialized" not in st.session_state:
+    st.session_state.initialized = False
 
-  if 'api_messages' not in st.session_state:
-    st.session_state.api_messages = [
-      {'role': "user", "content": combine_contexts()},
-      {'role': "assistant", "content": "Understood"},
-    ]
+
+async def initialize_chatbot():
+  initialize_session_state()
+
+  # if 'api_messages' not in st.session_state:
+  #   st.session_state.api_messages = [
+  #     {'role': "user", "content": combine_contexts()},
+  #     {'role': "assistant", "content": "Understood"},
+  #  ]
   # Reinitialize chatbot with new identity
   chatbot = ChatBot(st.session_state.identity, INDEX, st.session_state)
-  # if 'chatbot' in st.session_state:
-  #   st.session_state.chatbot =
+
+  if not st.session_state.initialized:
+    await chatbot.initialize_conversation(combine_contexts())
+    st.session_state.initialized = True
+
   return chatbot
 
 
@@ -62,9 +75,14 @@ def combine_contexts() -> str:
 def delete_context(key: str):
   """Delete a context and trigger a rerun"""
   del st.session_state.contexts[key]
-  initialize_chatbot()
-  st.rerun()
+
+  # Reset initialization flag to rebuild conversation
+  st.session_state.initialized = False
+  if 'chatbot' in st.session_state:
+    del st.session_state.chatbot
+
   st.toast("Context deleted and chat state reset!", icon="✅")
+  st.rerun()
 
 
 def update_priority_filter(value):
@@ -87,14 +105,11 @@ def context_manager(contexts):
 
   keys_to_remove = []
   with st.sidebar:
-
     st.header("Search Settings")
 
     selected_topic = st.selectbox(
       "Filter by Topic",
       st.session_state.topics,
-      # on_change=update_topic_filter,
-      # args=(st.session_state.topic_filter,)
     )
     update_topic_filter(selected_topic)
 
@@ -104,10 +119,34 @@ def context_manager(contexts):
       1.0,
       0.5,
       0.1,
-      # on_change=update_priority_filter,
-      # args=(st.session_state.priority_filter,)
     )
     update_priority_filter(priority_filter)
+
+    if 'chatbot' in st.session_state:
+      st.header("Token Usage")
+      token_stats = st.session_state.chatbot.get_token_stats()
+
+      st.metric(
+        "Token Usage", f"{token_stats['current_usage']} / {token_stats['max_tokens']}")
+      progress_val = min(
+        1.0, token_stats['current_usage'] / token_stats['max_tokens'])
+      st.progress(progress_val)
+
+      # Display more detailed stats
+      col1, col2 = st.columns(2)
+      with col1:
+        st.write(f"Messages: {token_stats['message_count']}")
+        st.write(f"Used: {token_stats['percent_used']}%")
+      with col2:
+        st.write(f"Remaining: {token_stats['remaining_tokens']}")
+
+      # Reset conversation button
+      if st.button("Reset Conversation"):
+        # Reset session and reinitialize
+        st.session_state.initialized = False
+        # Create a new event loop for this synchronous context
+        # st.session_state.chatbot.reset_conversation(combine_contexts())
+        st.rerun()
 
     st.header("Agent Context")
     # Identity input (separate from contexts)
@@ -127,6 +166,8 @@ def context_manager(contexts):
       if st.button("Update", key=f"update_identity", type="primary", use_container_width=True, disabled=identity_changed != True):
         if identity_changed:
           st.session_state.identity = new_identity
+          st.session_state.initialized = False
+
           initialize_chatbot()
           st.toast("Identity updated and chat state reset!", icon="✅")
 
@@ -161,7 +202,7 @@ def context_manager(contexts):
           ):
             if context_changed:
               st.session_state.contexts[key] = new_context
-              initialize_chatbot()
+              # await initialize_chatbot()
               st.toast("Context updated and chat state reset!", icon="✅")
 
         with col3:
@@ -212,65 +253,90 @@ def create_markdown_media_summary(images, links, references):
   return "".join(summary_parts)
 
 
-def handle_stream_response(stream_response):
+# def handle_stream_response(stream_response):
+#   """Handle the streaming response and UI updates"""
+
+#   input_tokens, output_tokens = 0, 0  # Initialize token counters
+#   first_chunk = None  # To store the last chunk for token usage
+
+#   try:
+#     def stream_and_capture():
+#       nonlocal first_chunk
+#       with stream_response as stream:
+#         for chunk in stream:
+#           if chunk.type == "content_block_delta":
+#             yield chunk.delta.text
+#           if first_chunk is None:  # Capture the first chunk for token usage
+#             first_chunk = chunk
+#         # Stream the response while capturing the last chunk
+#     full_response = st.write_stream(stream_and_capture())
+#     # TODO Debug mode
+#     # st.write(first_chunk)
+
+#     if full_response is not None:
+#       st.session_state.display_messages.append({
+#           "role": "assistant",
+#           "content": full_response
+#       })
+#       st.session_state.api_messages.append({
+#           "role": "assistant",
+#           "content": full_response
+#       })
+
+#       if first_chunk and hasattr(first_chunk, "usage"):
+#         input_tokens = first_chunk.usage.input_tokens
+#         output_tokens = first_chunk.usage.output_tokens
+#         st.write(f"🔢 **Input Tokens:** {input_tokens}")
+#         st.write(f"🔢 **Output Tokens:** {output_tokens}")
+
+#   except Exception as e:
+#     st.error(f"handle_stream_response:error: {str(e)}")
+#     return None
+
+#     # For Debugging
+#     # with stream_response as stream:
+#     #   full_response = ""
+#     #   for chunk in stream:
+#     #     if chunk.type == "content_block_delta":
+#     #       text_chunk = chunk.delta.text
+#     #       st.write(text_chunk)
+#     #       full_response += text_chunk
+#     #       # Debug statement to print each chunk
+#     #       st.write(f"Chunk received: {text_chunk}")
+#     #       print(f"Chunk received: {text_chunk}")
+#     #   return full_response
+
+
+async def handle_stream_response(stream_response, chatbot):
   """Handle the streaming response and UI updates"""
-
-  input_tokens, output_tokens = 0, 0  # Initialize token counters
-  first_chunk = None  # To store the last chunk for token usage
-
-  # create_markdown_media_summary()
   try:
-    # Use write_stream to handle the streaming content
-    #     with stream_response as stream:
-    #       full_response = st.write_stream(
-    #           (chunk.delta.text for chunk in stream if chunk.type == "content_block_delta")
-    #       )
-
     def stream_and_capture():
-      nonlocal first_chunk
+      full_text = ""
       with stream_response as stream:
         for chunk in stream:
-          if chunk.type == "content_block_delta":
-            yield chunk.delta.text
-          if first_chunk is None:  # Capture the first chunk for token usage
-            first_chunk = chunk
-        # Stream the response while capturing the last chunk
+          if hasattr(chunk, 'type') and chunk.type == "content_block_delta" and hasattr(chunk, 'delta') and hasattr(chunk.delta, 'text'):
+            text_chunk = chunk.delta.text
+            full_text += text_chunk
+            yield text_chunk
+      return full_text
+
+    # Stream the response and capture the full text
     full_response = st.write_stream(stream_and_capture())
-    # TODO Debug mode
-    # st.write(first_chunk)
 
     if full_response is not None:
-      st.session_state.display_messages.append({
-          "role": "assistant",
-          "content": full_response
-      })
-      st.session_state.api_messages.append({
-          "role": "assistant",
-          "content": full_response
-      })
+      # Add assistant response to both API and display messages via SessionManager
+      await chatbot.session_manager.add_message(
+          "assistant", full_response, add_to_api=True, add_to_display=True
+      )
 
-      if first_chunk and hasattr(first_chunk, "usage"):
-        input_tokens = first_chunk.usage.input_tokens
-        output_tokens = first_chunk.usage.output_tokens
-        st.write(f"🔢 **Input Tokens:** {input_tokens}")
-        st.write(f"🔢 **Output Tokens:** {output_tokens}")
+      # Display token usage stats
+      token_stats = chatbot.get_token_stats()
+      st.caption(
+        f"Token usage: {token_stats['current_usage']} / {token_stats['max_tokens']} ({token_stats['percent_used']}%)")
 
   except Exception as e:
-    st.error(f"handle_stream_response:error: {str(e)}")
+    st.error(f"Error handling stream response: {str(e)}")
     return None
-
-    # For Debugging
-    # with stream_response as stream:
-    #   full_response = ""
-    #   for chunk in stream:
-    #     if chunk.type == "content_block_delta":
-    #       text_chunk = chunk.delta.text
-    #       st.write(text_chunk)
-    #       full_response += text_chunk
-    #       # Debug statement to print each chunk
-    #       st.write(f"Chunk received: {text_chunk}")
-    #       print(f"Chunk received: {text_chunk}")
-    #   return full_response
 
 
 async def main():
@@ -286,10 +352,13 @@ async def main():
   )
 
   contexts = initialize_contexts()
-  chatbot = initialize_chatbot()
+  # chatbot = initialize_chatbot()
+  if 'chatbot' not in st.session_state:
+    st.session_state.chatbot = await initialize_chatbot()
+
   context_manager(contexts)
 
-  for message in st.session_state.display_messages:
+  for message in st.session_state.chatbot.session_manager.get_display_messages():
     # ignore tool use blocks
     if isinstance(message["content"], str):
       with st.chat_message(message["role"]):
@@ -306,7 +375,7 @@ async def main():
         logging.info(user_msg)
         logging.info(st.session_state.filter)
 
-        stream_response, images, links, references = await chatbot.process_user_input(user_msg, st.session_state.filter)
+        stream_response, images, links, references = await st.session_state.chatbot.process_user_input(user_msg, st.session_state.filter)
 
         if images or links or references:
           main_col, media_col = st.columns([2, 1])
@@ -319,12 +388,11 @@ async def main():
               media_container.markdown(media_summary)
 
           with main_col:
-            handle_stream_response(stream_response)
+            await handle_stream_response(stream_response, st.session_state.chatbot)
 
         else:
-          handle_stream_response(stream_response)
+          await handle_stream_response(stream_response, st.session_state.chatbot)
 
 
 if __name__ == "__main__":
-  import asyncio
   asyncio.run(main())

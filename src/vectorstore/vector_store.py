@@ -121,6 +121,7 @@ class VectorStore:
     headings = ", ".join(chunk.get('headings', []))
     services = ", ".join(chunk.get('services', []))
     client_name = chunk.get('client_name')
+    content_type = chunk.get('content_type')
 
     content = chunk['content']
 
@@ -130,6 +131,7 @@ class VectorStore:
       {'Subjects: ' + subjects if subjects else ''}
       {'Services: ' + services if services else ''}
       {'Client: ' + client_name if client_name else ''}
+      {'Content Type: ' + content_type if content_type else ''}
       Content: {content}
     """.strip()
 
