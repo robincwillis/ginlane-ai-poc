@@ -5,7 +5,7 @@ import logging
 import asyncio
 import streamlit as st
 from agent.chatbot import ChatBot
-from config import MODEL, IDENTITY, INDEX, TOPICS, STATIC_GREETINGS_AND_GENERAL, SEARCH_K
+from config import MODEL, IDENTITY, ON_TOPIC_IDENTITY, OFF_TOPIC_IDENTITY, INDEX, TOPICS, STATIC_GREETINGS_AND_GENERAL, SEARCH_K
 
 logging.basicConfig(level=logging.INFO)
 
@@ -14,20 +14,22 @@ def initialize_contexts() -> Dict[str, str]:
   """Initialize default context values if they don't exist in session state"""
   if 'identity' not in st.session_state:
     st.session_state.identity = IDENTITY
+  if 'identity_on_topic' not in st.session_state:
+    st.session_state.identity_on_topic = ON_TOPIC_IDENTITY
+  if 'identity_off_topic' not in st.session_state:
+    st.session_state.identity_off_topic = OFF_TOPIC_IDENTITY
   if 'contexts' not in st.session_state:
     st.session_state.contexts = {
         'greeting_and_general': STATIC_GREETINGS_AND_GENERAL,
     }
   if 'topics' not in st.session_state:
     st.session_state.topics = TOPICS
-    st.session_state.topic_filter = "All"
 
   if 'priority_filter' not in st.session_state:
     st.session_state.priority_filter = 0.3
 
   if 'filter' not in st.session_state:
     st.session_state.filter = {
-      "subjects": None,
       "priority": {"$gte": 0.3}
     }
 
@@ -50,7 +52,13 @@ def initialize_session_state():
 async def initialize_chatbot():
   initialize_session_state()
   # initialize chatbot with new identity
-  chatbot = ChatBot(st.session_state.identity, INDEX, st.session_state)
+  chatbot = ChatBot(
+    st.session_state.identity,
+    st.session_state.identity_on_topic,
+    st.session_state.identity_off_topic,
+    INDEX,
+    st.session_state
+  )
 
   if not st.session_state.initialized:
     await chatbot.initialize_conversation(combine_contexts())
@@ -86,27 +94,12 @@ def update_priority_filter(value):
     st.session_state["filter"]["priority"] = {"$gte": value}
 
 
-def update_topic_filter(value):
-  if value != st.session_state.priority_filter:
-    st.session_state["topic_filter"] = value
-    if value != "All":
-      st.session_state["filter"]["subjects"] = value
-    else:
-      st.session_state["filter"]["subjects"] = None
-
-
 def context_manager(contexts):
   """Create a management interface for context texts"""
 
   keys_to_remove = []
   with st.sidebar:
     st.header("Search Settings")
-
-    selected_topic = st.selectbox(
-      "Filter by Topic",
-      st.session_state.topics,
-    )
-    update_topic_filter(selected_topic)
 
     priority_filter = st.slider(
       "Priority Threshold",

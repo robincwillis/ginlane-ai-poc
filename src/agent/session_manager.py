@@ -104,8 +104,6 @@ class SessionManager:
     """
     try:
       # Use Anthropic's token counting endpoint
-      print("Count Tokens...")
-      print(message)
       response = self.anthropic.messages.count_tokens(
         model=self.model,
         messages=[message]

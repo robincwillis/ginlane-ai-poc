@@ -9,7 +9,7 @@ import streamlit as st
 import json
 import pandas as pd
 
-from config import MODEL, SEARCH_K, MAX_TOKENS, STATIC_GREETINGS_AND_GENERAL, MAX_INPUT_TOKENS_PER_MINUTE, TOKEN_BUFFER
+from config import MODEL, SEARCH_K, MAX_TOKENS, STATIC_GREETINGS_AND_GENERAL, MAX_INPUT_TOKENS_PER_MINUTE, TOKEN_BUFFER, TOPICS
 from agent.tools import get_quote
 
 from vectorstore.vector_store import VectorStore
@@ -20,11 +20,15 @@ load_dotenv()
 
 
 class ChatBot:
-  def __init__(self, identity, index, session_state):
+  def __init__(self, identity, identity_on_topic, identity_off_topic, index, session_state):
     self.anthropic = Anthropic()
     self.session_state = session_state
     self.identity = identity
+    self.identity_on_topic = identity_on_topic
+    self.identity_off_topic = identity_off_topic
+    self.topics = TOPICS
     self.max_tokens = MAX_TOKENS
+    self.index = index
     self.vector_store = VectorStore(index_name=index)
     # self.vector_db.load_db() # For local dev
     self.session_manager = SessionManager(
@@ -45,14 +49,14 @@ class ChatBot:
       self.session_state.initialized = True
     return self
 
-  def stream_message(self):
+  def stream_message(self, identity):
     try:
 
       messages = self.session_manager.get_api_messages()
 
       response = self.anthropic.messages.stream(
         model=MODEL,
-        system=self.identity,
+        system=identity or self.identity,
         max_tokens=self.max_tokens,
         messages=messages,
         # tools=TOOLS
@@ -61,12 +65,12 @@ class ChatBot:
     except Exception as e:
       return {"error": str(e)}
 
-  def create_message(self):
+  def create_message(self, identity):
     try:
       messages = self.session_manager.get_api_messages()
       response = self.anthropic.messages.create(
         model=MODEL,
-        system=self.identity,
+        system=identity or self.identity,
         max_tokens=self.max_tokens,
         messages=messages,
       )
@@ -133,17 +137,17 @@ class ChatBot:
     return (images, links, references)
 
   async def get_context(self, search_input, filter):
+    images = []
+    links = []
+    references = []
+
     clean_filter = {k: v for k, v in filter.items() if v is not None}
+
     search_results = await self.vector_store.search_similar(search_input, SEARCH_K, filter=clean_filter)
     if search_results:
       images, links, references = self.get_media(search_results)
 
-      with st.expander("🧠 Identity"):
-        logging.info(self.identity)
-        st.write(self.identity)
-
       with st.expander("📕 Relevant Documents"):
-        logging.info(search_results)
         st.json(search_results, expanded=False)
         extracted_results = [
             {
@@ -176,15 +180,19 @@ class ChatBot:
       context = "\n".join(
         [f"{text}\n\n" for text, score, metadata in search_results])
 
-      # content = embedded_text.split("Text:", 1)[1].strip(
-      # ) if "Text:" in embedded_text else embedded_text
-
-      # response_text = content
-
     else:
       context = "No relevant documents found."
 
     return context, images, links, references
+
+  def get_system_prompt(self, input):
+    input_lower = input.lower()
+    for topic in self.topics:
+      if topic.lower() in input_lower:
+        return self.identity_on_topic
+
+    # If no topics match, classify as off-topic
+    return self.identity_off_topic
 
   async def process_eval_input(self, input, filter):
     context_text, images, links, references = await self.get_context(input, filter)
@@ -202,16 +210,14 @@ class ChatBot:
 
     messages.append(context_message)
 
-    response = self.create_message()
+    identity = self.get_system_prompt(input)
+
+    response = self.create_message(identity)
 
     return response
 
   async def process_user_input(self, user_input, filter):
-    # self.session_state.display_messages.append(
-    #   {"role": "user", "content": user_input})
-
     await self.session_manager.add_message("user", user_input, add_to_api=False, add_to_display=True)
-
     context_text, images, links, references = await self.get_context(user_input, filter)
 
     # Include the response from the vector database as context for the LLM
@@ -233,7 +239,11 @@ class ChatBot:
         is_context=True
     )
 
-    stream_response = self.stream_message()
+    identity = self.get_system_prompt(user_input)
+
+    with st.expander("🧠 Identity"):
+      st.write(identity)
+    stream_response = self.stream_message(identity)
 
     if isinstance(stream_response, dict) and "error" in stream_response:
       st.error(f"Error: {stream_response['error']}")

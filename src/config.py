@@ -83,6 +83,8 @@ IDENTIY_MYSTIC = """ You are Little Plains, a digital mystic—an oracle of desi
 """
 
 IDENTITY = IDENTIY_MYSTIC
+ON_TOPIC_IDENTITY = IDENTITY_V4
+OFF_TOPIC_IDENTITY = IDENTIY_NOLA
 
 STATIC_GREETINGS_AND_GENERAL = """<static_context>
 Little Plains: We’re a New York-based branding and experience design studio helping tech-enabled businesses build stronger connections with their customers.
@@ -94,10 +96,11 @@ Our team is led by Emmett Shine, and includes experts across design, branding, r
 We take a design-led approach, working closely with founders and operators to build, launch, and scale ideas into successful businesses.
 We collaborate with startup founders and venture investors in the consumer and high-tech sectors, from early-stage innovators to scaling businesses.  
 
+Little Plains featured client is:
+* Camber
 
 Some of Little Plains clients include:
-* Aspects
-* Camber
+* Aspects Big Sky
 * Company Ventures
 * ESP
 * Fallen Grape
@@ -178,20 +181,67 @@ Whether you're looking to refine your brand, build a digital product, or explore
 """
 
 TOPICS = [
-    "All",
+    "Gin Lane",
+    "Little Plains",
+    "Design",
+    "Communication",
+    "Experience",
     "AI and Automation",
     "Advanced and Personalized Help",
     "Advice",
-    "Analytics and Insights",
-    "Branding and Positioning",
+    "Analytics",
+    "Insights",
+    "Brand",
+    "Branding",
+    "Positioning",
+    "Startup",
     "Business",
+    "Company",
+    "Market",
+    "Launch",
+    "Money",
+    "Product",
+    "Agency",
+    "Digital",
+    "Creative",
+    "Direction",
+    "Campaign",
+    "Platform",
+    "Growth",
+    "Web",
+    "DTC",
+    "Model",
+    "Strategy",
+    "Needs",
+    "Rate",
+    "Sales",
+    "User",
+    "Approach",
+    "Challenge",
+    "Pattern",
+    "Founder",
+    "Investor",
+    "DTC",
+    "Health",
+    "Space",
+    "E-Commerce",
     "Capabilities",
-    "Case Studies and Value",
+    "Case Study",
+    "Client",
+    "Results",
+    "Value",
     "Company",
     "Content Strategy and Marketing",
     "Creative Direction",
     "Digital Experiences and Websites",
-    "Existential",
+    "Services",
+    "Capabilities",
+    "Role",
+    "Case Study",
+    "Case Studies",
+    "Project",
+    "Website",
+    "Capital",
     "FAQs",
     "General Inquiries",
     "Go-to-Market Strategy",
@@ -200,7 +250,24 @@ TOPICS = [
     "Scaling and Growth",
     "Team",
     "Tech",
-    "Who is Emmett"
+    "Emmett",
+    "Pricing",
+    "Timeline",
+    "Time",
+    "Camber",
+    "Aspects Big Sky",
+    "Company Ventures",
+    "ESP",
+    "Fallen Grape",
+    "Hims",
+    "Hers",
+    "Infinite Garden",
+    "JAJA",
+    "Noun Coffee",
+    "Revitin",
+    "Rorra",
+    "Smile Direct Club",
+    "Sweetgreen",
 ]
 
 TERMS = """

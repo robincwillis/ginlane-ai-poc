@@ -89,26 +89,22 @@ class VectorStore:
     chunks: List[Dict]
   ):
     """Calculate relationship strength between a chunk and related chunks"""
-    # print("calculate relationships")
     chunk_id = metadata['id']
     related_chunks = metadata.get('related_chunks', [])
     relationship_strength = 1.0  # Base strength
 
     if related_chunks:
-      # print('Related chunks:', related_chunks)
       relationship_strength = 0.2 * len(related_chunks)
     else:
       for chunk in chunks:
         if chunk_id in chunk.get('related_chunks', []):
-          # print("chunk_id is related_chunks")
-          # print(chunk)
+
           related_chunks.append(chunk['id'])
           # Boost strength based on number of related questions
           relationship_strength += 0.2
         # if client or service, then boost strength
 
     if related_chunks:
-      # print('Related chunks:', related_chunks)
       return ChunkRelation(
         chunk_id=chunk_id,
         relationship_ids=related_chunks,
@@ -383,7 +379,6 @@ class VectorStore:
     rerank=True,
     rerank_k=None
   ) -> List[Dict]:
-
     query_embedding = self.embeddings.embed_documents([query])[0]
 
     # Query Pinecone
@@ -393,7 +388,6 @@ class VectorStore:
       include_metadata=True,
       filter=filter
     )
-
     # Process and return results
     results = []
     candidates = []
