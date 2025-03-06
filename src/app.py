@@ -49,14 +49,14 @@ def initialize_session_state():
 
 async def initialize_chatbot():
   initialize_session_state()
-
-  # Reinitialize chatbot with new identity
+  # initialize chatbot with new identity
   chatbot = ChatBot(st.session_state.identity, INDEX, st.session_state)
 
   if not st.session_state.initialized:
     await chatbot.initialize_conversation(combine_contexts())
     st.session_state.initialized = True
 
+  st.toast("I'm up!", icon="🏄🏽‍♀️")
   return chatbot
 
 
@@ -117,32 +117,6 @@ def context_manager(contexts):
     )
     update_priority_filter(priority_filter)
 
-    if 'chatbot' in st.session_state:
-      st.header("Token Usage")
-      token_stats = st.session_state.chatbot.get_token_stats()
-
-      st.metric(
-        "Token Usage", f"{token_stats['current_usage']} / {token_stats['max_tokens']}")
-      progress_val = min(
-        1.0, token_stats['current_usage'] / token_stats['max_tokens'])
-      st.progress(progress_val)
-
-      # Display more detailed stats
-      col1, col2 = st.columns(2)
-      with col1:
-        st.write(f"Messages: {token_stats['message_count']}")
-        st.write(f"Used: {token_stats['percent_used']}%")
-      with col2:
-        st.write(f"Remaining: {token_stats['remaining_tokens']}")
-
-      # Reset conversation button
-      if st.button("Reset Conversation"):
-        # Reset session and reinitialize
-        st.session_state.initialized = False
-        if 'chatbot' in st.session_state:
-          del st.session_state.chatbot
-        st.rerun()
-
     st.header("Agent Context")
     # Identity input (separate from contexts)
     new_identity = st.text_area(
@@ -165,6 +139,7 @@ def context_manager(contexts):
           if 'chatbot' in st.session_state:
             del st.session_state.chatbot
           st.toast("Identity updated and chat state reset!", icon="✅")
+          st.rerun()  # Add this to force a rerun
 
     # Container for context editors
     context_editors = st.container()
@@ -201,14 +176,49 @@ def context_manager(contexts):
               if 'chatbot' in st.session_state:
                 del st.session_state.chatbot
               st.toast("Context updated and chat state reset!", icon="✅")
+              st.rerun()
 
         with col3:
           if st.button("🗑️", key=f"delete_{key}", use_container_width=True):
             keys_to_remove.append(key)
 
+    # Token stats section at the bottom of sidebar
+    if 'chatbot' in st.session_state:
+      st.header("Token Usage")
+      token_stats = st.session_state.chatbot.get_token_stats()
+
+      st.metric(
+        "Token Usage", f"{token_stats['current_usage']} / {token_stats['max_tokens']}")
+      progress_val = min(
+        1.0, token_stats['current_usage'] / token_stats['max_tokens'])
+      st.progress(progress_val)
+
+      # Display more detailed stats
+      col1, col2 = st.columns(2)
+      with col1:
+        st.write(f"Messages: {token_stats['message_count']}")
+        st.write(f"Used: {token_stats['percent_used']}%")
+      with col2:
+        st.write(f"Remaining: {token_stats['remaining_tokens']}")
+
+      # Reset conversation button
+      if st.button("Reset Conversation"):
+        # Reset session and reinitialize
+        st.session_state.display_messages = []
+        st.session_state.api_messages = []
+        st.session_state.message_tokens = []
+        st.session_state.token_usage = 0
+        st.session_state.initialized = False
+        if 'chatbot' in st.session_state:
+          st.session_state.chatbot.reset_conversation(combine_contexts())
+          del st.session_state.chatbot
+        st.toast("Conversation has been reset!", icon="🔄")
+        st.rerun()
+
     st.write(f"Model: {MODEL}")
     st.write(f"Index: {INDEX}")
     st.write(f"Search K: {SEARCH_K}")
+
   for key in keys_to_remove:
     delete_context(key)
 
@@ -351,7 +361,6 @@ async def main():
   contexts = initialize_contexts()
   if 'chatbot' not in st.session_state:
     st.session_state.chatbot = await initialize_chatbot()
-    st.toast("Init Chatbot!", icon="✅")
 
   context_manager(contexts)
 
