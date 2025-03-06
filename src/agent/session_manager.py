@@ -23,18 +23,18 @@ class SessionManager:
     self.max_tokens = max_tokens
     self.token_buffer = token_buffer
     self.system_prompt = system_prompt
-    self.st_session = session_state
+    self.session = session_state
 
     # Initialize session variables if they don't exist
-    if self.st_session:
-      if "api_messages" not in self.st_session:
-        self.st_session.api_messages = []
-      if "display_messages" not in self.st_session:
-        self.st_session.display_messages = []
-      if "token_usage" not in self.st_session:
-        self.st_session.token_usage = 0
-      if "message_tokens" not in self.st_session:
-        self.st_session.message_tokens = []
+    if self.session:
+      if "api_messages" not in self.session:
+        self.session.api_messages = []
+      if "display_messages" not in self.session:
+        self.session.display_messages = []
+      if "token_usage" not in self.session:
+        self.session.token_usage = 0
+      if "message_tokens" not in self.session:
+        self.session.message_tokens = []
 
     # Local state for non-Streamlit usage
     self.api_messages = []
@@ -44,53 +44,53 @@ class SessionManager:
 
   def get_api_messages(self) -> List[Dict[str, str]]:
     """Get the current message history."""
-    if self.st_session:
-      return self.st_session.api_messages
+    if self.session:
+      return self.session.api_messages
     return self.api_messages
 
   def get_display_messages(self) -> List[Dict[str, str]]:
     """Get the current display message history."""
-    if self.st_session:
-      return self.st_session.display_messages
+    if self.session:
+      return self.session.display_messages
     return self.display_messages
 
   def _get_token_usage(self) -> int:
     """Get current token usage."""
-    if self.st_session:
-      return self.st_session.token_usage
+    if self.session:
+      return self.session.token_usage
     return self.current_token_usage
 
   def _get_message_tokens(self) -> List[Dict[str, Any]]:
     """Get token metadata for all messages."""
-    if self.st_session:
-      return self.st_session.message_tokens
+    if self.session:
+      return self.session.message_tokens
     return self.message_tokens
 
   def _update_api_messages(self, messages: List[Dict[str, str]]) -> None:
     """Update the message history."""
-    if self.st_session:
-      self.st_session.api_messages = messages
+    if self.session:
+      self.session.api_messages = messages
     else:
       self.api_messages = messages
 
   def _update_display_messages(self, messages: List[Dict[str, str]]) -> None:
     """Update the display message history."""
-    if self.st_session:
-      self.st_session.display_messages = messages
+    if self.session:
+      self.session.display_messages = messages
     else:
       self.display_messages = messages
 
   def _update_token_usage(self, usage: int) -> None:
     """Update token usage count."""
-    if self.st_session:
-      self.st_session.token_usage = usage
+    if self.session:
+      self.session.token_usage = usage
     else:
       self.current_token_usage = usage
 
   def _update_message_tokens(self, msg_tokens: List[Dict[str, Any]]) -> None:
     """Update token metadata for messages."""
-    if self.st_session:
-      self.st_session.message_tokens = msg_tokens
+    if self.session:
+      self.session.message_tokens = msg_tokens
     else:
       self.message_tokens = msg_tokens
 
@@ -112,6 +112,7 @@ class SessionManager:
       return token_count
 
     except Exception as e:
+      logging.info([message])
       logging.warning(f"Error counting tokens: {str(e)}")
       return 0
 

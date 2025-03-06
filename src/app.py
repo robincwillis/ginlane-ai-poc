@@ -3,9 +3,11 @@ from typing import Dict, List, Any, Optional
 import uuid
 import logging
 import asyncio
+import threading
+import time
 import streamlit as st
 from agent.chatbot import ChatBot
-from config import MODEL, IDENTITY, ON_TOPIC_IDENTITY, OFF_TOPIC_IDENTITY, INDEX, TOPICS, STATIC_GREETINGS_AND_GENERAL, SEARCH_K
+from config import MODEL, IDENTITY, PERSONALITY, PRIORITY_THRESHOLD, PERSONALITY_LEVEL, ON_TOPIC_IDENTITY, OFF_TOPIC_IDENTITY, INDEX, TOPICS, STATIC_GREETINGS_AND_GENERAL, SEARCH_K
 
 logging.basicConfig(level=logging.INFO)
 
@@ -14,6 +16,8 @@ def initialize_contexts() -> Dict[str, str]:
   """Initialize default context values if they don't exist in session state"""
   if 'identity' not in st.session_state:
     st.session_state.identity = IDENTITY
+  if 'personality_level' not in st.session_state:
+    st.session_state.personality_level = PERSONALITY_LEVEL
   if 'identity_on_topic' not in st.session_state:
     st.session_state.identity_on_topic = ON_TOPIC_IDENTITY
   if 'identity_off_topic' not in st.session_state:
@@ -26,11 +30,11 @@ def initialize_contexts() -> Dict[str, str]:
     st.session_state.topics = TOPICS
 
   if 'priority_filter' not in st.session_state:
-    st.session_state.priority_filter = 0.3
+    st.session_state.priority_filter = PRIORITY_THRESHOLD
 
   if 'filter' not in st.session_state:
     st.session_state.filter = {
-      "priority": {"$gte": 0.3}
+      "priority": {"$gte": PRIORITY_THRESHOLD}
     }
 
   return st.session_state.contexts
@@ -52,10 +56,23 @@ def initialize_session_state():
 async def initialize_chatbot():
   initialize_session_state()
   # initialize chatbot with new identity
+  identity = st.session_state.identity
+  personality_level = st.session_state.get("personality_level")
+  personality = PERSONALITY[personality_level]
+  insert_position = st.session_state.identity.find("\n\n")
+
+  if insert_position == -1:
+    # If we can't find a good position, just append it
+    identity += personality
+  else:
+    # Insert the personality text after the first paragraph
+    identity = st.session_state.identity[:insert_position] + "\n\n" + \
+        personality + st.session_state.identity[insert_position:]
+
   chatbot = ChatBot(
-    st.session_state.identity,
-    st.session_state.identity_on_topic,
-    st.session_state.identity_off_topic,
+    identity,
+    identity + st.session_state.identity_on_topic,
+    identity + st.session_state.identity_off_topic,
     INDEX,
     st.session_state
   )
@@ -85,13 +102,24 @@ def delete_context(key: str):
     del st.session_state.chatbot
 
   st.toast("Context deleted and chat state reset!", icon="✅")
-  st.rerun()
+  st.session_state.needs_rerun = True
 
 
 def update_priority_filter(value):
-  if value != st.session_state.priority_filter:
+  if value != st.session_state["priority_filter"]:
     st.session_state["priority_filter"] = value
     st.session_state["filter"]["priority"] = {"$gte": value}
+
+
+def update_personality():
+  # if value - 1 != st.session_state["personality_level"]:
+  index = st.session_state.personality_slider - 1
+  if index != st.session_state.personality_level:
+    st.session_state["personality_level"] = index
+    st.session_state.initialized = False
+    if 'chatbot' in st.session_state:
+      del st.session_state.chatbot
+    st.session_state.needs_rerun = True
 
 
 def context_manager(contexts):
@@ -99,13 +127,31 @@ def context_manager(contexts):
 
   keys_to_remove = []
   with st.sidebar:
-    st.header("Search Settings")
+    st.header("Settings")
+
+    personality_labels = {
+      1: "🧀",
+      2: "🍅",
+      3: "🍕",
+      4: "🌶️",
+      5: "🧨"
+    }
+
+    personality_level = st.slider(
+        f"Personality: {personality_labels[st.session_state.personality_level + 1]}",
+        min_value=1,
+        max_value=5,
+        value=st.session_state.personality_level + 1,  # Default value
+        step=1,
+        key="personality_slider",
+        on_change=update_personality
+    )
 
     priority_filter = st.slider(
       "Priority Threshold",
       0.0,
       1.0,
-      0.5,
+      0.3,
       0.1,
     )
     update_priority_filter(priority_filter)
@@ -132,7 +178,7 @@ def context_manager(contexts):
           if 'chatbot' in st.session_state:
             del st.session_state.chatbot
           st.toast("Identity updated and chat state reset!", icon="✅")
-          st.rerun()  # Add this to force a rerun
+          st.session_state.needs_rerun = True
 
     # Container for context editors
     context_editors = st.container()
@@ -169,7 +215,7 @@ def context_manager(contexts):
               if 'chatbot' in st.session_state:
                 del st.session_state.chatbot
               st.toast("Context updated and chat state reset!", icon="✅")
-              st.rerun()
+              st.session_state.needs_rerun = True
 
         with col3:
           if st.button("🗑️", key=f"delete_{key}", use_container_width=True):
@@ -206,7 +252,7 @@ def context_manager(contexts):
           st.session_state.chatbot.reset_conversation(combine_contexts())
           del st.session_state.chatbot
         st.toast("Conversation has been reset!", icon="🔄")
-        st.rerun()
+        st.session_state.needs_rerun = True
 
     st.write(f"Model: {MODEL}")
     st.write(f"Index: {INDEX}")
@@ -253,60 +299,6 @@ def create_markdown_media_summary(images, links, references):
   return "".join(summary_parts)
 
 
-# def handle_stream_response(stream_response):
-#   """Handle the streaming response and UI updates"""
-
-#   input_tokens, output_tokens = 0, 0  # Initialize token counters
-#   first_chunk = None  # To store the last chunk for token usage
-
-#   try:
-#     def stream_and_capture():
-#       nonlocal first_chunk
-#       with stream_response as stream:
-#         for chunk in stream:
-#           if chunk.type == "content_block_delta":
-#             yield chunk.delta.text
-#           if first_chunk is None:  # Capture the first chunk for token usage
-#             first_chunk = chunk
-#         # Stream the response while capturing the last chunk
-#     full_response = st.write_stream(stream_and_capture())
-#     # TODO Debug mode
-#     # st.write(first_chunk)
-
-#     if full_response is not None:
-#       st.session_state.display_messages.append({
-#           "role": "assistant",
-#           "content": full_response
-#       })
-#       st.session_state.api_messages.append({
-#           "role": "assistant",
-#           "content": full_response
-#       })
-
-#       if first_chunk and hasattr(first_chunk, "usage"):
-#         input_tokens = first_chunk.usage.input_tokens
-#         output_tokens = first_chunk.usage.output_tokens
-#         st.write(f"🔢 **Input Tokens:** {input_tokens}")
-#         st.write(f"🔢 **Output Tokens:** {output_tokens}")
-
-#   except Exception as e:
-#     st.error(f"handle_stream_response:error: {str(e)}")
-#     return None
-
-#     # For Debugging
-#     # with stream_response as stream:
-#     #   full_response = ""
-#     #   for chunk in stream:
-#     #     if chunk.type == "content_block_delta":
-#     #       text_chunk = chunk.delta.text
-#     #       st.write(text_chunk)
-#     #       full_response += text_chunk
-#     #       # Debug statement to print each chunk
-#     #       st.write(f"Chunk received: {text_chunk}")
-#     #       print(f"Chunk received: {text_chunk}")
-#     #   return full_response
-
-
 async def handle_stream_response(stream_response, chatbot):
   """Handle the streaming response and UI updates"""
   try:
@@ -338,6 +330,28 @@ async def handle_stream_response(stream_response, chatbot):
     st.error(f"Error handling stream response: {str(e)}")
     return None
 
+# Define the emoji spinner function
+
+
+def emoji_spinner(container, delay=0.3):
+  emoji_list = ["🗽", "🤌", "🔥", "🍕", "🧄", "🚕", "🏙️", "🌶️", "🍝", "💪", "🍷"]
+  stop_spinner = threading.Event()
+
+  def spin_emojis():
+    i = 0
+    # Instead of trying to create an empty placeholder inside the container,
+    # directly update the container with markdown
+    while not stop_spinner.is_set():
+      with container.container():
+        st.markdown(f"{emoji_list[i]} thinking...")
+      i = (i + 1) % len(emoji_list)
+      time.sleep(delay)
+
+  spinner_thread = threading.Thread(target=spin_emojis)
+  spinner_thread.start()
+
+  return stop_spinner, spinner_thread
+
 
 async def main():
   st.set_page_config(page_icon=":penguin:",
@@ -357,6 +371,10 @@ async def main():
 
   context_manager(contexts)
 
+  if st.session_state.get("needs_rerun", False):
+    st.session_state.needs_rerun = False
+    st.rerun()
+
   for message in st.session_state.chatbot.session_manager.get_display_messages():
     # ignore tool use blocks
     if isinstance(message["content"], str):
@@ -368,8 +386,8 @@ async def main():
     st.chat_message("User").markdown(user_msg)
 
     with st.chat_message("assistant"):
-      with st.spinner("🐧 is thinking..."):
-        # response_placeholder = st.empty()
+      with st.spinner("Thinking..."):
+          # response_placeholder = st.empty()
         logging.info('User Message')
         logging.info(user_msg)
         logging.info(st.session_state.filter)

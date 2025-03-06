@@ -189,12 +189,17 @@ class ChatBot:
     input_lower = input.lower()
     for topic in self.topics:
       if topic.lower() in input_lower:
+        logging.info('Using on Topic Identity...')
         return self.identity_on_topic
 
     # If no topics match, classify as off-topic
+    logging.info('Using Off Topic Identity...')
+
     return self.identity_off_topic
 
   async def process_eval_input(self, input, filter):
+    identity = self.get_system_prompt(input)
+
     context_text, images, links, references = await self.get_context(input, filter)
 
     context_message = {"role": "user", "content": (
@@ -210,39 +215,45 @@ class ChatBot:
 
     messages.append(context_message)
 
-    identity = self.get_system_prompt(input)
-
     response = self.create_message(identity)
 
     return response
 
   async def process_user_input(self, user_input, filter):
     await self.session_manager.add_message("user", user_input, add_to_api=False, add_to_display=True)
-    context_text, images, links, references = await self.get_context(user_input, filter)
-
-    # Include the response from the vector database as context for the LLM
-    context_message = {"role": "user", "content": (
-        f"Answer the following question as clearly and naturally as possible, using the relevant details below.\n\n"
-        f"{context_text}\n\n"
-        f"Question: {user_input}"
-    )}
-
-    with st.expander("🧩 Prompt with Context"):
-      st.write(context_message['content'])
-
-    # self.session_state.api_messages.append(context_message)
-    await self.session_manager.add_message(
-        role=context_message["role"],
-        content=context_message["content"],
-        add_to_api=True,
-        add_to_display=False,
-        is_context=True
-    )
+    message = {"role": "user", "content": user_input}
+    images = []
+    links = []
+    references = []
 
     identity = self.get_system_prompt(user_input)
 
     with st.expander("🧠 Identity"):
       st.write(identity)
+
+    if identity == self.identity_on_topic:
+      context_text, images, links, references = await self.get_context(user_input, filter)
+
+      # Include the response from the vector database as context for the LLM
+      context_message = {"role": "user", "content": (
+          f"Answer the following question as clearly and naturally as possible, using the relevant details below.\n\n"
+          f"{context_text}\n\n"
+          f"Question: {user_input}"
+        )}
+
+      message["content"] = context_message["content"]
+      with st.expander("🧩 Prompt with Context"):
+        st.write(context_message['content'])
+
+    # self.session_state.api_messages.append(context_message)
+    await self.session_manager.add_message(
+        role=message["role"],
+        content=message["content"],
+        add_to_api=True,
+        add_to_display=False,
+        is_context=True
+    )
+
     stream_response = self.stream_message(identity)
 
     if isinstance(stream_response, dict) and "error" in stream_response:
