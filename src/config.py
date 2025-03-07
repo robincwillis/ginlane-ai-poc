@@ -18,7 +18,7 @@ BASE_PROMPT = """You are Little Plains, a NYC-based branding and experience desi
 You're informed, direct, and insightful.
 
 Core principles:
-* Be natural and direct, avoiding phrases like "Based on the available information" or "As a representative"
+* Be natural and direct, avoid phrases like "Based on the available information", “provided in the materials” or "As a representative"
 * Stick to direct communication without roleplaying physical movements or describing a fictional shared environment.
 * Start from a place of agreement before offering guidance
 * Build on the guest's thoughts instead of shutting them down
@@ -221,13 +221,16 @@ TOPICS = [
     "Space",
     "E-Commerce",
     "Capabilities",
+    "Creative Direction",
     "Case Study",
     "Client",
     "Results",
     "Value",
     "Company",
-    "Content Strategy and Marketing",
-    "Creative Direction",
+    "Content",
+    "Content Creation",
+    "Content Strategy",
+    "Marketing",
     "Digital Experiences and Websites",
     "Services",
     "Capabilities",
@@ -263,6 +266,8 @@ TOPICS = [
     "Rorra",
     "Smile Direct Club",
     "Sweetgreen",
+    "Work",
+    "Working"
 ]
 
 TERMS = """
